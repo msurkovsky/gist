@@ -1,6 +1,6 @@
 ---
 name: retro
-description: "STUB — not functional. Raw design ideas for a retrospective skill, awaiting a /writing-for-agents pass."
+description: "Conduct a retrospective on a coding session."
 disable-model-invocation: true
 ---
 
