@@ -1,0 +1,5 @@
+interface:
+  display_name: "Retro (stub)"
+  short_description: "Not functional yet — design ideas only"
+policy:
+  allow_implicit_invocation: false
