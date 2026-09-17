@@ -1,6 +1,6 @@
 ---
 name: pr
-description: "Compose a pull request body that makes human review fast: a summary drawn from the primary source (not the diff), a readable walkthrough of the shape of the change, evidence tied to the specific failure it guards against, what was deliberately left out, and a one-way/two-way door call on merge risk. Use when opening a PR, running `gh pr create`, or asked to write a PR description or body."
+description: "Compose a pull request body that makes human review fast: a summary drawn from the primary source (not the diff), a readable walkthrough of the shape of the change, a before/after pair of evidence for each claim (visual first, a failing-then-passing test run otherwise), what was deliberately left out, and a one-way/two-way door call on merge risk. Use when opening a PR, running `gh pr create`, or asked to write a PR description or body."
 ---
 
 # PR
@@ -48,9 +48,15 @@ This step is `show-me`'s technique, aimed at a diff instead of a live conversati
 
 Use one, occasionally two; never all three. If nothing embeds well for this particular change, a plain description is fine and forcing a diagram is worse than skipping it.
 
-### 6. Tie evidence to the fear
+### 6. Show the before and after
 
-Never write "tests pass." For each piece of evidence, name the specific failure it rules out: "`orders.test.ts:42` covers the double-refund case this touches" says something; "all tests green" says nothing, because a tautological test that asserts its own mock would also be green. If you ran the repo's own checks (lint, typecheck, the full suite), say which ones and that they were run for real, not assumed. If a feared failure has no test covering it, say that too, plainly, rather than pointing at unrelated green output.
+Never write "tests pass." A single after-the-fact snapshot, whether it's a screenshot or a green test run, proves the current state works; it doesn't prove *this diff* is what changed it. Evidence is a pair: what it looked like before, and what it looks like after, for the same input.
+
+Reach for a visual pair first: a before/after screenshot or terminal-output pair for the same action, a rendered diagram, a comparison of the actual output for the same input. Embed both sides directly in the body; a single "after" image is half the proof.
+
+Where nothing visual exists, fall back to code execution: run the specific test red against the base commit (or temporarily revert the fix) and green on this branch, and quote both runs rather than describing them. Name the failure each pair rules out: "`orders.test.ts:42` failed on `main` with a double refund, passes on this branch" says something a bare "all tests green" doesn't, because a tautological test that asserts its own mock would pass both before and after and prove nothing. If you ran the repo's other checks (lint, typecheck, the full suite), say which ones and that they were run for real, not assumed.
+
+If a feared failure has neither a visual nor a test covering it on either side, say that plainly instead of pointing at unrelated green output.
 
 ### 7. Say what was left out, on purpose
 
@@ -78,7 +84,9 @@ Fill this shape, dropping any section a step above said to skip:
 <diagram, diff-sketch, or tree>
 
 ## Evidence
-- <check run> rules out <specific failure>
+- **Before:** <screenshot/output/failing test run>
+  **After:** <screenshot/output/passing test run>
+  Rules out: <specific failure>
 - ...
 
 ## Left out, on purpose
