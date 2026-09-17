@@ -29,9 +29,7 @@ Use this template for writing the PR body:
 
 ## Sections
 
-Skip all preambles and keep prose brief.
-
-Use the user's domain language from `CONTEXT.md`.
+Skip all preambles and keep prose brief. Use the user's domain language from `CONTEXT.md`.
 
 ### Summary
 
@@ -162,7 +160,7 @@ Concrete evidence that the change works. Show a before and after.
 
 Screenshots are S-tier - when the environment is set up for it and the change is visual.
 
-Execution-based evidence is A-tier. Test results, console output. Show the exact steps taken and the outcomes observed.
+Execution-based evidence is A-tier. Test results, console output. Show the exact test that now fails and passes, using pseudocode.
 
 ### Merge Danger
 
