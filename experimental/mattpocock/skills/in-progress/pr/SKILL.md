@@ -29,7 +29,7 @@ Use this template for writing the PR body:
 
 ## Sections
 
-Be concise. Optimise for information density and review speed. Communicate the why, not just the how.
+Be concise. Optimise for information density and review speed. Communicate the why, not just the how. Use the user's domain language from `CONTEXT.md`.
 
 ### Summary
 
