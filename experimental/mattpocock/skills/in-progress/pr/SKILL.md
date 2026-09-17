@@ -1,48 +1,39 @@
 ---
 name: pr
-description: "Reference for the shape a pull request body should take, so review is fast: a summary from the primary source (not the diff), the smallest visual that shows the change, a before/after pair of evidence, what was left out on purpose, and a one-way/two-way door call. Use when writing a PR body or description."
+description: "Use when writing a PR body."
+metadata:
+  credits:
+    skill: show-me
+    author: Dex Horthy
+    organisation: Humanlayer
+    url: "https://github.com/humanlayer/skills/blob/main/plugins/show-me/skills/show-me/SKILL.md"
 ---
 
-# PR
-
-A generic PR body rehashes the diff under "Summary" and pads out a "Test plan" checklist: it answers *what* changed, never *why*, *how risky*, or what to watch for. Fill this shape instead:
+Use this template for writing the PR body:
 
 ```markdown
 ## Summary
-<1-3 sentences, from the primary source, stating why>
 
-**Size:** <N files, +A/-B lines>  **Door:** <one-way | two-way> (<reason>)
-
-## The shape of the change
 <diagram, diff-sketch, or tree>
 
 ## Evidence
+
 - **Before:** <screenshot/output/failing test run>
   **After:** <screenshot/output/passing test run>
-  Rules out: <specific failure>
 
-## Left out, on purpose
-- <thing deliberately not handled, and why>
+## Merge Danger
 
-## Not sure about
-- <a real doubt, if one exists; drop the section otherwise>
+**Door:** one-way or two-way
+**Blast Radius:** <potential ramifications of merge>
 ```
 
-## Summary
+## Sections
 
-Draw it from the primary source: the issue, the spec, a path handed to you, or a spec file under `docs/`, `specs/`, or `.scratch/` matching the branch. The diff is evidence for *how*; it cannot supply *why*, and a summary built only from the diff will invent one that sounds right and isn't. Found nothing upstream? Say so, rather than presenting a diff-inferred guess as fact.
+Be concise. Optimise for information density and review speed. Communicate the why, not just the how.
 
-Name concepts with the repo's own glossary term (`CONTEXT.md`), and say so directly if the diff contradicts a documented ADR, rather than describing the new behaviour as if the old decision never existed.
+### Summary
 
-## Size and door
-
-One line, stated before the reviewer starts reading: files touched, lines added/removed.
-
-The door is a judgement call the author makes explicitly, not left for the reviewer to infer from the diff's size: **one-way** (expensive to reverse: a migration, a deleted column, a public API change) or **two-way** (cheap to revert: additive, flagged, internal). Size and reversibility are different axes: a big mechanical rename is two-way, a one-line dropped column is one-way.
-
-## The shape of the change
-
-`show-me`'s technique (credited in `CREDITS.md`), aimed at a diff. Pick the smallest view that makes the shape of the change land, embedded directly in the body, never a standalone HTML artifact.
+Pick the smallest view that makes the shape of the change land, embedded directly in the body.
 
 - Show logic or an algorithm as pseudocode:
 
@@ -67,10 +58,8 @@ submitForm
 - Show UI structure as a component tree, including state and module boundaries that matter:
 
 ```tsx
-<SessionPage> (apps/example/src/routes/session.tsx)
-  useSessionEvents()
-  <SessionToolbar>
-    <RunSkillButton> (packages/ui)
+<SessionPage>(apps / example / src / routes / session.tsx);
+useSessionEvents() < SessionToolbar > <RunSkillButton>(packages / ui);
 ```
 
 - Show file responsibility or a broad refactor as a shallow file tree:
@@ -148,17 +137,23 @@ For a state or control-flow change:
 
 ```ts
 function expandSkill(command: string): string {
-  const skillName = command.slice(1)
-  return `use the ${skillName} skill`
+  const skillName = command.slice(1);
+  return `use the ${skillName} skill`;
 }
 ```
 
 Place each visual next to the short text it supports. Keep only the calls, files, props, states, and boundaries needed to make the change clear to a reviewer. Use one, occasionally two; never all of them.
 
-## Evidence
+### Evidence
 
-A single after-the-fact snapshot (one screenshot, one green run) proves the current state works, not that this diff is what changed it. Show a **before/after pair**: a screenshot or output comparison for the same input first; a test failing on the base commit and passing on the branch only when nothing visual exists. Name the failure each pair rules out. "Tests pass" alone rules out nothing a tautological test wouldn't also pass.
+Concrete evidence that the change works. Show a before and after.
 
-## Left out, on purpose
+Screenshots are S-tier - when the environment is set up for it and the change is visual.
 
-What the diff deliberately doesn't handle, including things adjacent to it a reviewer might expect. Report only what you considered and skipped: you can't reliably report what you never thought of, so don't claim the list is exhaustive.
+Execution-based evidence is A-tier. Test results, console output. Show the exact steps taken and the outcomes observed.
+
+### Merge Danger
+
+Describe whether it's a one-way or two-way door. You can walk back through two-way doors, but not one-way doors. A PR that is cheap to roll back is lower risk. Changes that involve destructive actions or hard-to-reverse decisions are one-way doors.
+
+The blast radius is the potential impact or scope of the changes introduced by this PR. Consider all possibilities. Examples are layout shift, breakages for consumers, mobile responsiveness, etc.
