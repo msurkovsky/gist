@@ -9,6 +9,8 @@ Skills are the product. Tools exist to serve them.
 - `tools/` — cargo workspace. `gist-core` holds shared output plumbing,
   `gist-cli` builds the `gk` binary.
 - `docs/tool-contract.md` — read before adding a subcommand.
+- `docs/adr/` — one file per decision worth not re-litigating. Add one when
+  the rejected options were real.
 
 ## Language
 

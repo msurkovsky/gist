@@ -14,7 +14,7 @@ the work, read the shape of what came back, catch the wrong turn, and decide.
 ```
 skills/     the product — one directory per skill
 tools/      cargo workspace; builds the gk binary
-docs/       tool contract and design notes
+docs/       tool contract, and decisions in docs/adr
 ```
 
 ## Build
