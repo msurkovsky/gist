@@ -1,0 +1,10 @@
+[package]
+name = "gist-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Shared plumbing for gist tools: output envelopes, exit codes."
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }

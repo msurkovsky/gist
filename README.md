@@ -9,6 +9,22 @@ model is the doer and the human stays at the altitude where judgment still
 matters. Not line-by-line review. Enough understanding to participate: to scope
 the work, read the shape of what came back, catch the wrong turn, and decide.
 
+## Layout
+
+```
+skills/     the product — one directory per skill
+tools/      cargo workspace; builds the gk binary
+docs/       tool contract and design notes
+```
+
+## Build
+
+```bash
+just ci        # fmt, clippy, test
+just install   # put gk on PATH
+gk outline .   # first tool: what shape is this repo
+```
+
 ## Status
 
-Early. Nothing here yet but the idea.
+Early. One skill, one tool, and a contract to keep the rest honest.
