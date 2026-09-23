@@ -63,3 +63,16 @@ fn main() -> ExitCode {
         Ok(code) | Err(code) => code,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::Cli;
+    use clap::CommandFactory;
+
+    #[test]
+    fn the_command_line_definition_is_internally_consistent() {
+        // Catches conflicting flag names and bad arg groups at test time
+        // rather than when a caller trips over them.
+        Cli::command().debug_assert();
+    }
+}

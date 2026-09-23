@@ -76,7 +76,36 @@ pub fn repo_root() -> Result<PathBuf, String> {
 }
 
 pub fn diff(source: &Source) -> Result<Vec<FileDiff>, String> {
-    Ok(parse_diff(&run(&source.diff_args())?))
+    let mut files = parse_diff(&run(&source.diff_args())?);
+
+    // `git diff` never mentions untracked files, but a new file is the most
+    // documentation-heavy thing a change can contain. Every line of one is an
+    // added line.
+    if matches!(source, Source::Worktree) {
+        let root = repo_root()?;
+        for path in untracked()? {
+            let Ok(content) = std::fs::read_to_string(root.join(&path)) else {
+                continue;
+            };
+            let added = content
+                .lines()
+                .enumerate()
+                .map(|(index, text)| (index + 1, text.to_string()))
+                .collect();
+            files.push(FileDiff { path, added });
+        }
+    }
+
+    Ok(files)
+}
+
+fn untracked() -> Result<Vec<String>, String> {
+    let output = run(&[
+        "ls-files".to_string(),
+        "--others".to_string(),
+        "--exclude-standard".to_string(),
+    ])?;
+    Ok(output.lines().map(|line| line.to_string()).collect())
 }
 
 /// Full content of a file as it looks after the change, or `None` when it

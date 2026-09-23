@@ -32,3 +32,6 @@ These rules exist so the agent never has to guess.
 2. Define a `#[derive(Debug, Serialize)]` result type and `impl Human` for it.
 3. Return `Result<T, String>`; the error string is what the caller sees.
 4. Test the failure path, not just the happy one.
+5. Add an end-to-end test in `crates/gist-cli/tests/cli.rs`. Unit tests cover
+   classification; only an end-to-end test covers exit codes, the envelope,
+   and whatever git actually does.

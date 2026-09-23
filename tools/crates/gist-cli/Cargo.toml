@@ -14,3 +14,7 @@ gist-core = { workspace = true }
 clap = { workspace = true }
 ignore = { workspace = true }
 serde = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+tempfile = "3"
