@@ -22,6 +22,7 @@ pub enum Source {
 }
 
 impl Source {
+    /// How this source is named in output.
     pub fn label(&self) -> String {
         match self {
             Source::Worktree => "worktree".to_string(),
@@ -70,11 +71,13 @@ pub struct FileDiff {
     pub added: Vec<(usize, String)>,
 }
 
+/// Absolute path of the enclosing checkout.
 pub fn repo_root() -> Result<PathBuf, String> {
     let output = run(&["rev-parse".to_string(), "--show-toplevel".to_string()])?;
     Ok(PathBuf::from(output.trim()))
 }
 
+/// Added lines per file. Untracked files count in full for a worktree source.
 pub fn diff(source: &Source) -> Result<Vec<FileDiff>, String> {
     let mut files = parse_diff(&run(&source.diff_args())?);
 

@@ -17,6 +17,7 @@ use lang::{LineKind, Scanner};
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 
+/// Command line for `gk doc`.
 #[derive(ClapArgs, Debug)]
 pub struct Args {
     /// Count whole files or directories instead of a diff
@@ -44,6 +45,7 @@ pub struct Args {
     limit: usize,
 }
 
+/// One measurement: totals, the files behind them, and the runs to go read.
 #[derive(Debug, Serialize)]
 pub struct Report {
     source: String,
@@ -89,6 +91,7 @@ struct Run {
     lines: usize,
 }
 
+/// Measure a diff, or whole files when `--files` is given.
 pub fn run(args: Args) -> Result<Report, String> {
     if args.files.is_empty() {
         measure_diff(&args)

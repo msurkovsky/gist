@@ -28,4 +28,4 @@ gk doc         # how much of my change is documentation
 
 ## Status
 
-Early. One skill, two tools, and a contract to keep the rest honest.
+Early. Two skills, two tools, and a contract to keep the rest honest.

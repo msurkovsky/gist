@@ -40,6 +40,7 @@ pub fn syntax_for(path: &Path) -> Option<Syntax> {
     Some(syntax)
 }
 
+/// What a single line contributes to the count.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum LineKind {
     Comment,
@@ -61,6 +62,7 @@ pub struct Scanner {
 }
 
 impl Scanner {
+    /// Start at the top of a file written in `syntax`.
     pub fn new(syntax: Syntax) -> Self {
         Self {
             syntax,
@@ -68,6 +70,7 @@ impl Scanner {
         }
     }
 
+    /// Classify one line and carry any block state to the next.
     pub fn classify(&mut self, raw: &str) -> LineKind {
         let line = raw.trim();
 

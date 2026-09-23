@@ -6,6 +6,7 @@ use serde::Serialize;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+/// A tree seen from above: totals, plus where the weight sits.
 #[derive(Debug, Serialize)]
 pub struct Outline {
     root: String,
@@ -23,6 +24,7 @@ struct FileType {
     bytes: u64,
 }
 
+/// Summarize `path`, heaviest file type first.
 pub fn outline(path: &PathBuf, limit: usize, all: bool) -> Result<Outline, String> {
     if !path.exists() {
         return Err(format!("no such path: {}", path.display()));
