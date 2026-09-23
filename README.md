@@ -22,9 +22,10 @@ docs/       tool contract and design notes
 ```bash
 just ci        # fmt, clippy, test
 just install   # put gk on PATH
-gk outline .   # first tool: what shape is this repo
+gk outline .   # what shape is this repo
+gk doc         # how much of my change is documentation
 ```
 
 ## Status
 
-Early. One skill, one tool, and a contract to keep the rest honest.
+Early. One skill, two tools, and a contract to keep the rest honest.
