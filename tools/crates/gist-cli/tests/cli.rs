@@ -416,3 +416,26 @@ fn gitignored_files_are_not_mistaken_for_new_work() {
     assert_eq!(data["totals"]["doc"], 0);
     assert_eq!(data["totals"]["code"], 0);
 }
+
+#[test]
+fn a_renamed_file_counts_only_what_changed_in_it() {
+    let repo = Repo::new();
+    let body: String = (0..40)
+        .map(|n| format!("export const v{n} = {n};\n"))
+        .collect();
+    repo.write("src/old.ts", &body);
+    repo.commit("base");
+
+    std::fs::remove_file(repo.path().join("src/old.ts")).expect("remove");
+    repo.write("src/new.ts", &format!("{body}// one\n// two\n"));
+
+    let data = repo.data(&["doc"]);
+    assert_eq!(
+        data["totals"]["code"], 0,
+        "the moved body is not a new 40 lines of code"
+    );
+    assert_eq!(
+        data["totals"]["doc"], 2,
+        "only the added comment run counts"
+    );
+}

@@ -114,8 +114,8 @@ fn source_from(args: &Args) -> Source {
 
 fn measure_diff(args: &Args) -> Result<Report, String> {
     let source = source_from(args);
-    let root = git::repo_root()?;
-    let diffs = git::diff(&source)?;
+    let repo = git::Repo::discover()?;
+    let diffs = repo.diff(&source)?;
 
     let mut builder = ReportBuilder::new(source.label(), args.min_run);
 
@@ -130,7 +130,7 @@ fn measure_diff(args: &Args) -> Result<Report, String> {
 
         let selected: Vec<usize> = file.added.iter().map(|(number, _)| *number).collect();
         let mut approximate = false;
-        let kinds: Vec<LineKind> = match git::post_image(&source, &root, &file.path) {
+        let kinds: Vec<LineKind> = match repo.post_image(&source, &file.path) {
             // Classifying the whole file is the only way to know whether an
             // added line sits inside a block comment opened further up.
             Some(content) => {
