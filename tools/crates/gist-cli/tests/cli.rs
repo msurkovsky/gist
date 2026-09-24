@@ -417,12 +417,31 @@ fn gitignored_files_are_not_mistaken_for_new_work() {
     assert_eq!(data["totals"]["code"], 0);
 }
 
+/// Number of files under this repo's `skills/`, the tree `init --claude` embeds.
+/// Counted from the source tree so adding a skill does not mean editing a literal here.
+fn embedded_skill_file_count() -> u64 {
+    fn walk(dir: &Path, n: &mut u64) {
+        for entry in std::fs::read_dir(dir).expect("read skills dir") {
+            let path = entry.expect("dir entry").path();
+            if path.is_dir() {
+                walk(&path, n);
+            } else {
+                *n += 1;
+            }
+        }
+    }
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../skills");
+    let mut n = 0;
+    walk(&root, &mut n);
+    n
+}
+
 #[test]
 fn init_claude_installs_the_embedded_skills_into_dot_claude() {
     let repo = Repo::new();
     let data = repo.data(&["init", "--claude"]);
 
-    assert_eq!(data["totals"]["installed"], 3);
+    assert_eq!(data["totals"]["installed"], embedded_skill_file_count());
     assert_eq!(data["totals"]["conflicts"], 0);
 
     let outline = repo.path().join(".claude/skills/gist-outline/SKILL.md");
@@ -444,7 +463,7 @@ fn init_claude_is_idempotent_on_a_second_run() {
     let data = repo.data(&["init", "--claude"]);
 
     assert_eq!(data["totals"]["installed"], 0);
-    assert_eq!(data["totals"]["unchanged"], 3);
+    assert_eq!(data["totals"]["unchanged"], embedded_skill_file_count());
     assert_eq!(data["totals"]["conflicts"], 0);
 }
 
