@@ -1,5 +1,5 @@
 ---
-name: outline
+name: gist-outline
 description: Summarize the shape of a codebase — file counts, dominant languages, where the weight sits. Use when orienting in an unfamiliar repo, before planning work, or when asked "what is this project" or "what am I looking at".
 ---
 

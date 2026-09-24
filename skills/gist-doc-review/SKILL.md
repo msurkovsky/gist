@@ -1,5 +1,5 @@
 ---
-name: doc-review
+name: gist-doc-review
 description: Review the comments and doc strings in a change — cut the ones restating the code, shorten the bloated ones, add the missing line on public API. Use when asked to "review the docs", "check my comments", "am I overdocumenting", "doc review", or before shipping a change that added a lot of prose.
 ---
 
