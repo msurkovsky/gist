@@ -350,8 +350,9 @@ pub fn run(args: Args) -> Result<Report, String> {
                     // or `--uninstall` would delete a file gk doesn't own.
                     let path = file.path.display().to_string();
                     if status != Status::Conflict {
-                        manifest_entries
-                            .insert(ManifestPath::try_from(path.clone())?, hash(&file.contents));
+                        // Embedded paths are plain by construction; only a
+                        // parsed manifest needs the check.
+                        manifest_entries.insert(ManifestPath(path.clone()), hash(&file.contents));
                     }
 
                     file_reports.push(FileReport { path, status });
