@@ -275,16 +275,25 @@ pub fn run(args: Args) -> Result<Report, String> {
         let root_path = Path::new(root);
         let mut target_totals = Totals::default();
         let mut skills = Vec::with_capacity(items.len());
-        let mut manifest_entries: BTreeMap<String, String> =
-            read_manifest(&root_path.join(MANIFEST_FILENAME))?
-                .map(|manifest| {
-                    manifest
-                        .files
-                        .into_iter()
-                        .map(|entry| (entry.path, entry.sha256))
-                        .collect()
-                })
-                .unwrap_or_default();
+        let manifest_path = root_path.join(MANIFEST_FILENAME);
+        let mut manifest_entries: BTreeMap<String, String> = match read_manifest(&manifest_path)? {
+            ManifestRead::Absent => BTreeMap::new(),
+            ManifestRead::Found(manifest) => manifest
+                .files
+                .into_iter()
+                .map(|entry| (entry.path, entry.sha256))
+                .collect(),
+            // Rebuilding over it would drop tracking of every file outside
+            // this run's selection without a word.
+            ManifestRead::Corrupt(reason) => {
+                return Err(format!(
+                    "{} is not a valid manifest ({reason}) — delete it to start \
+                     tracking afresh; files an earlier run placed will no longer \
+                     be tracked",
+                    manifest_path.display()
+                ))
+            }
+        };
 
         for item in &items {
             let mut file_reports = Vec::with_capacity(item.files.len());
@@ -344,13 +353,16 @@ fn run_uninstall(roots: &[&str], force: bool) -> Result<UninstallReport, String>
         // A missing or corrupt manifest means nothing to do, not an error —
         // running `--uninstall` twice (or on a target `init` never touched)
         // is not a failure, matching install's own idempotency.
-        let Some(manifest) = read_manifest(&manifest_path)? else {
-            targets.push(UninstallTargetReport {
-                target: root.to_string(),
-                totals: UninstallTotals::default(),
-                files: Vec::new(),
-            });
-            continue;
+        let manifest = match read_manifest(&manifest_path)? {
+            ManifestRead::Found(manifest) => manifest,
+            ManifestRead::Absent | ManifestRead::Corrupt(_) => {
+                targets.push(UninstallTargetReport {
+                    target: root.to_string(),
+                    totals: UninstallTotals::default(),
+                    files: Vec::new(),
+                });
+                continue;
+            }
         };
 
         let mut entries = manifest.files;
@@ -626,11 +638,22 @@ fn hash(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
 
-/// The manifest at `path`, or `None` when it is absent or unparseable.
-fn read_manifest(path: &Path) -> Result<Option<Manifest>, String> {
+/// What sits at a target root's manifest path.
+enum ManifestRead {
+    Absent,
+    Corrupt(String),
+    Found(Manifest),
+}
+
+/// Read the manifest at `path`. Only an I/O failure is an `Err`; a file that
+/// does not parse is `Corrupt`, so each caller decides what that means.
+fn read_manifest(path: &Path) -> Result<ManifestRead, String> {
     match std::fs::read(path) {
-        Ok(bytes) => Ok(serde_json::from_slice(&bytes).ok()),
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Ok(bytes) => Ok(match serde_json::from_slice(&bytes) {
+            Ok(manifest) => ManifestRead::Found(manifest),
+            Err(err) => ManifestRead::Corrupt(err.to_string()),
+        }),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(ManifestRead::Absent),
         Err(err) => Err(format!("could not read {}: {err}", path.display())),
     }
 }

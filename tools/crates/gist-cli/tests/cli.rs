@@ -866,6 +866,34 @@ fn rerunning_without_experimental_keeps_earlier_experimental_files_tracked() {
 }
 
 #[test]
+fn init_refuses_to_overwrite_a_corrupt_manifest() {
+    let repo = Repo::new();
+    repo.write(".claude/skills/.gist-manifest.json", "not json");
+
+    let (code, _, stderr) = repo.gk(&["init", "--claude", "--json"]);
+    assert_eq!(code, 1, "expected refusal, not misuse");
+    let value: Value = serde_json::from_str(&stderr).expect("error envelope on stderr");
+    assert_eq!(value["status"], "error");
+    let message = value["message"].as_str().expect("message");
+    assert!(message.contains(".gist-manifest.json"), "got: {message}");
+
+    let contents = std::fs::read_to_string(repo.path().join(".claude/skills/.gist-manifest.json"))
+        .expect("read");
+    assert_eq!(contents, "not json");
+    assert!(!repo.path().join(".claude/skills/gist-outline").exists());
+}
+
+#[test]
+fn init_claude_uninstall_with_a_corrupt_manifest_is_a_zero_op() {
+    let repo = Repo::new();
+    repo.write(".claude/skills/.gist-manifest.json", "not json");
+
+    let data = repo.data(&["init", "--claude", "--uninstall"]);
+    assert_eq!(data["totals"]["removed"], 0);
+    assert_eq!(data["totals"]["kept"], 0);
+}
+
+#[test]
 fn init_claude_uninstall_force_removes_everything() {
     let repo = Repo::new();
     repo.data(&["init", "--claude"]);

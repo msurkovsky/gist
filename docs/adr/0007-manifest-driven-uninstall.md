@@ -102,7 +102,9 @@ version skew and against a target root that was built with a different
 `--experimental` selection than another — at the cost of being unusable if
 the manifest itself is deleted or corrupted, which falls back to the
 zero-op-not-an-error path (same as a target `init` never touched), not a
-crash. `Report` becomes an enum over an install-direction and an
+crash. An install run does not take that fallback for a corrupt manifest: it
+refuses, because rebuilding over the file would silently drop tracking of
+every file outside the run's selection. Deleting the file acknowledges that. `Report` becomes an enum over an install-direction and an
 uninstall-direction report, since the two produce genuinely different
 per-file status vocabularies (`installed`/`unchanged`/`overwritten`/
 `conflict` vs. `removed`/`kept`/`missing`); `Report::has_conflicts` is
