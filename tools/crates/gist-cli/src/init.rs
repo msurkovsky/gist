@@ -430,20 +430,16 @@ fn run_uninstall(roots: &[&str], force: bool) -> Result<UninstallReport, String>
         for entry in entries {
             let target = root_path.join(entry.path.as_path());
 
-            let status = match std::fs::read(&target) {
-                Err(err) if err.kind() == std::io::ErrorKind::NotFound => UninstallStatus::Missing,
+            let disk = match std::fs::read(&target) {
+                Ok(bytes) => Some(bytes),
+                Err(err) if err.kind() == std::io::ErrorKind::NotFound => None,
                 Err(err) => return Err(format!("could not read {}: {err}", target.display())),
-                Ok(bytes) => {
-                    if force || hash(&bytes) == entry.sha256 {
-                        std::fs::remove_file(&target).map_err(|err| {
-                            format!("could not remove {}: {err}", target.display())
-                        })?;
-                        UninstallStatus::Removed
-                    } else {
-                        UninstallStatus::Kept
-                    }
-                }
             };
+            let status = decide_uninstall(disk.as_deref(), &entry.sha256, force);
+            if status == UninstallStatus::Removed {
+                std::fs::remove_file(&target)
+                    .map_err(|err| format!("could not remove {}: {err}", target.display()))?;
+            }
 
             if let Some(parent) = entry.path.as_path().parent() {
                 for ancestor in parent.ancestors() {
@@ -653,6 +649,16 @@ fn collect_files<'a>(dir: &'a Dir<'a>, out: &mut Vec<&'a File<'a>>) {
     out.extend(dir.files());
     for sub in dir.dirs() {
         collect_files(sub, out);
+    }
+}
+
+/// The uninstall counterpart of `decide`: what to do with one recorded file,
+/// given what is on disk. No I/O.
+fn decide_uninstall(disk: Option<&[u8]>, recorded_sha256: &str, force: bool) -> UninstallStatus {
+    match disk {
+        None => UninstallStatus::Missing,
+        Some(bytes) if force || hash(bytes) == recorded_sha256 => UninstallStatus::Removed,
+        Some(_) => UninstallStatus::Kept,
     }
 }
 
@@ -897,23 +903,6 @@ mod tests {
                 "expected `{expected}` in {}",
                 path.display()
             );
-        }
-    }
-
-    fn decide_uninstall(
-        disk: Option<&[u8]>,
-        recorded_sha256: &str,
-        force: bool,
-    ) -> UninstallStatus {
-        match disk {
-            None => UninstallStatus::Missing,
-            Some(bytes) => {
-                if force || hash(bytes) == recorded_sha256 {
-                    UninstallStatus::Removed
-                } else {
-                    UninstallStatus::Kept
-                }
-            }
         }
     }
 
