@@ -80,7 +80,10 @@ exactly what it placed. `--uninstall` reads that manifest and removes what it
 recorded — files edited since install are left in place and reported, again
 overridable with `--force` — instead of re-deriving a removal list from
 whichever skills the running binary currently embeds (see
-`docs/adr/0007-manifest-driven-uninstall.md`).
+`docs/adr/0007-manifest-driven-uninstall.md`). `init` and `--uninstall` refuse
+to read or write through a symlink under the target, such as one
+`scripts/link.sh` made; remove the link first. The target directory itself may
+be a symlink.
 
 ## Composition
 

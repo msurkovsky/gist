@@ -312,6 +312,7 @@ pub fn run(args: Args) -> Result<Report, String> {
         let mut target_totals = Totals::default();
         let mut skills = Vec::with_capacity(items.len());
         let manifest_path = root_path.join(MANIFEST_FILENAME);
+        refuse_symlink(root_path, Path::new(MANIFEST_FILENAME))?;
         let mut manifest_entries: BTreeMap<ManifestPath, String> =
             match read_manifest(&manifest_path)? {
                 ManifestRead::Absent => BTreeMap::new(),
@@ -337,6 +338,7 @@ pub fn run(args: Args) -> Result<Report, String> {
                 let mut file_reports = Vec::with_capacity(item.files.len());
                 for file in &item.files {
                     let target = root_path.join(&file.path);
+                    refuse_symlink(root_path, &file.path)?;
                     let status = place(&target, &file.contents, args.force)?;
                     totals.record(status);
                     target_totals.record(status);
@@ -393,6 +395,7 @@ fn run_uninstall(roots: &[&str], force: bool) -> Result<UninstallReport, String>
     for root in roots {
         let root_path = Path::new(root);
         let manifest_path = root_path.join(MANIFEST_FILENAME);
+        refuse_symlink(root_path, Path::new(MANIFEST_FILENAME))?;
 
         // A missing or corrupt manifest means nothing to do, not an error —
         // running `--uninstall` twice (or on a target `init` never touched)
@@ -418,6 +421,11 @@ fn run_uninstall(roots: &[&str], force: bool) -> Result<UninstallReport, String>
 
         let mut entries = manifest.files;
         entries.sort_by(|a, b| a.path.cmp(&b.path));
+
+        // Checked up front so a refusal removes nothing at all.
+        for entry in &entries {
+            refuse_symlink(root_path, entry.path.as_path())?;
+        }
 
         let mut target_totals = UninstallTotals::default();
         let mut file_reports = Vec::with_capacity(entries.len());
@@ -683,6 +691,30 @@ fn place(target: &Path, contents: &[u8], force: bool) -> Result<Status, String> 
             .map_err(|err| format!("could not write {}: {err}", target.display()))?;
     }
     Ok(status)
+}
+
+/// Refuse a path with a symlink anywhere under `root`, the file itself
+/// included: a read, write, or removal through it would land wherever the
+/// link points, outside the root. The root itself may be a symlink, since
+/// people link `~/.claude/skills` into a dotfiles repo.
+fn refuse_symlink(root: &Path, rel: &Path) -> Result<(), String> {
+    let mut current = root.to_path_buf();
+    for component in rel.components() {
+        current.push(component);
+        match std::fs::symlink_metadata(&current) {
+            Ok(meta) if meta.file_type().is_symlink() => {
+                return Err(format!(
+                    "{} is a symlink, and gk will not read or write through one — \
+                     remove the link (scripts/link.sh makes them) and rerun",
+                    current.display()
+                ))
+            }
+            Ok(_) => {}
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(err) => return Err(format!("could not inspect {}: {err}", current.display())),
+        }
+    }
+    Ok(())
 }
 
 fn hash(bytes: &[u8]) -> String {

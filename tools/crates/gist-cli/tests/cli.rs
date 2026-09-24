@@ -789,6 +789,86 @@ fn uninstall_refuses_a_manifest_that_is_json_but_not_a_manifest() {
     assert!(message.contains("nothing was removed"), "got: {message}");
 }
 
+#[cfg(unix)]
+#[test]
+fn init_refuses_to_write_through_a_symlinked_skill_directory() {
+    let repo = Repo::new();
+    let outside = TempDir::new().expect("temp dir");
+    std::fs::create_dir_all(repo.path().join(".claude/skills")).expect("mkdir");
+    std::os::unix::fs::symlink(
+        outside.path(),
+        repo.path().join(".claude/skills/gist-outline"),
+    )
+    .expect("symlink");
+
+    let (code, message) = repo.error(&["init", "--claude", "--force"]);
+
+    assert_eq!(code, 1);
+    assert!(message.contains("symlink"), "got: {message}");
+    assert_eq!(
+        std::fs::read_dir(outside.path()).expect("read").count(),
+        0,
+        "nothing may land outside the repo"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn init_refuses_a_manifest_that_is_a_dangling_symlink() {
+    let repo = Repo::new();
+    let outside = TempDir::new().expect("temp dir");
+    std::fs::create_dir_all(repo.path().join(".claude/skills")).expect("mkdir");
+    std::os::unix::fs::symlink(
+        outside.path().join("planted.json"),
+        repo.path().join(".claude/skills/.gist-manifest.json"),
+    )
+    .expect("symlink");
+
+    let (code, message) = repo.error(&["init", "--claude"]);
+
+    assert_eq!(code, 1);
+    assert!(message.contains("symlink"), "got: {message}");
+    assert!(!outside.path().join("planted.json").exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn uninstall_removes_nothing_when_a_recorded_path_crosses_a_symlink() {
+    let repo = Repo::new();
+    repo.data(&["init", "--claude"]);
+    let outside = TempDir::new().expect("temp dir");
+    std::fs::write(outside.path().join("SKILL.md"), "precious").expect("write");
+    std::fs::remove_dir_all(repo.path().join(".claude/skills/gist-outline")).expect("rm");
+    std::os::unix::fs::symlink(
+        outside.path(),
+        repo.path().join(".claude/skills/gist-outline"),
+    )
+    .expect("symlink");
+
+    let (code, message) = repo.error(&["init", "--claude", "--uninstall", "--force"]);
+
+    assert_eq!(code, 1);
+    assert!(message.contains("symlink"), "got: {message}");
+    assert!(outside.path().join("SKILL.md").exists());
+    assert!(
+        repo.path().join(".claude/skills/gist-doc-review").exists(),
+        "a refusal removes nothing, not even the files that were fine"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn a_symlinked_skills_root_is_still_allowed() {
+    let repo = Repo::new();
+    let real = TempDir::new().expect("temp dir");
+    std::fs::create_dir_all(repo.path().join(".claude")).expect("mkdir");
+    std::os::unix::fs::symlink(real.path(), repo.path().join(".claude/skills")).expect("symlink");
+
+    repo.data(&["init", "--claude"]);
+
+    assert!(real.path().join("gist-outline/SKILL.md").exists());
+}
+
 #[test]
 fn init_refuses_a_manifest_whose_paths_leave_the_root() {
     let repo = Repo::new();

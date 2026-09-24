@@ -53,6 +53,11 @@ whatever an earlier run recorded (nothing, if it was never gk's), and files
 outside this run's selection stay recorded. Recording a conflicted file's
 on-disk hash would let `--uninstall` delete a file gk never wrote.
 
+A symlink anywhere under a target root, the manifest and each file included,
+makes `init` and `--uninstall` refuse: a write or removal through it lands
+wherever the link points. Uninstall checks every recorded path before
+removing any. The root itself may be a symlink.
+
 Every `path` is checked when the manifest is parsed: relative, plain
 components only, no `..`, no root. A manifest is a file a repo can carry, and
 joining an unchecked path to the root would let `--uninstall` delete anything
@@ -143,5 +148,9 @@ nothing on disk) with no I/O. `tests/cli.rs` end-to-end:
 `an_io_failure_partway_still_records_the_files_already_placed`,
 `uninstall_never_removes_a_file_outside_the_root_named_by_dotdot`,
 `uninstall_never_removes_an_absolute_path_even_with_force`,
-`init_refuses_a_manifest_whose_paths_leave_the_root`, and
-`uninstall_refuses_a_manifest_that_is_json_but_not_a_manifest`.
+`init_refuses_a_manifest_whose_paths_leave_the_root`,
+`uninstall_refuses_a_manifest_that_is_json_but_not_a_manifest`,
+`init_refuses_to_write_through_a_symlinked_skill_directory`,
+`init_refuses_a_manifest_that_is_a_dangling_symlink`,
+`uninstall_removes_nothing_when_a_recorded_path_crosses_a_symlink`, and
+`a_symlinked_skills_root_is_still_allowed`.
