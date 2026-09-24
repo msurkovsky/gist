@@ -17,3 +17,15 @@ Summary:
   for the manifest-decision logic — full list in the plan
 
 Pick up here: read the plan file, confirm still wanted, implement (TDD).
+
+## Later: `gk init --claude` vendors more than skills
+
+- `languages/` adapters and `hooks/` are not embedded, so a target repo gets
+  `gist-toolchain` with every verb `unsupported` until `~/.claude/languages/` or
+  `.claude/languages/` exists, and installs the commit-msg hook by symlink to a
+  gist checkout. Decide whether `init` should place them and whether a
+  `gk hook install` subcommand replaces the symlink.
+- First view: `views/claude/workspace.josh` for `~/.claude/skills` on this
+  machine, then one per project that should receive the `gist-mr-*` family.
+- Wire `hooks/post-rebase-nag.sh` into `~/.claude/settings.json`.
+
