@@ -1,5 +1,5 @@
 ---
-name: mr-ready
+name: gist-mr-ready
 description: Gate a branch before opening or updating a merge request. Runs checks per folder group, reviews per folder group, proves tests, measures against the target branch, and drafts a description that carries only what the page cannot show.
 disable-model-invocation: true
 ---
@@ -24,11 +24,11 @@ Base is `origin/<target branch>`, never a mid-branch commit. Range for everythin
   defines a pattern (`git config mr.commitPattern`), every subject matches it and one type
   runs across the branch (`git config branch.<name>.mrType`).
 - No `fixup!`, `squash!`, or WIP commits left. If history must be rewritten, follow the
-  backup-ref rule from `/mr-close` first.
+  backup-ref rule from `/gist-mr-close` first.
 
 ## 3. Toolchain gate
 
-Call the Skill tool with "toolchain" for verbs `install`, `typecheck`, `lint`, `test`, and
+Call the Skill tool with "gist-toolchain" for verbs `install`, `typecheck`, `lint`, `test`, and
 `coverage` over the range. Then `prove-red` for every new or changed test.
 
 - `unsupported` lines are reported verbatim in the final checklist. Do not paper over them.

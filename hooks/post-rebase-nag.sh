@@ -4,7 +4,7 @@
 #
 # settings.json:
 #   "PostToolUse": [{ "matcher": "Bash",
-#     "hooks": [{ "type": "command", "command": "/path/to/my-skills/hooks/post-rebase-nag.sh" }] }]
+#     "hooks": [{ "type": "command", "command": "/path/to/gist/hooks/post-rebase-nag.sh" }] }]
 #
 # Reads the hook JSON from stdin. Uses node for parsing (present wherever Claude Code runs).
 set -uo pipefail
@@ -19,7 +19,7 @@ Rebase detected. Before trusting typecheck, lint, or tests:
 1. Re-install dependencies (lockfile may have moved).
 2. Rebuild generated code; check whether a bumped generated client made a hand-written type obsolete.
 3. Run typecheck and the full suite.
-Use the toolchain skill for the language-specific commands.
+Use the gist-toolchain skill for the language-specific commands.
 MSG
 fi
 exit 0

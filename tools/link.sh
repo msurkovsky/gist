@@ -4,7 +4,7 @@
 #   tools/link.sh <skill-dir> [as-name] [dest-dir]
 #
 # Examples:
-#   tools/link.sh skills/mr-reply
+#   tools/link.sh skills/gist-mr-reply
 #   tools/link.sh experimental/mattpocock/skills/engineering/tdd matt-tdd
 #   tools/link.sh skills/toolchain toolchain ~/projects/frontend/.claude/skills
 #

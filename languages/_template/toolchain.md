@@ -1,6 +1,6 @@
 # Toolchain adapter: <language>
 
-Copy this directory to `languages/<lang>/` and fill every section. The `toolchain` skill
+Copy this directory to `languages/<lang>/` and fill every section. The `gist-toolchain` skill
 reads only this file for language-specific commands. A verb left as `none` is reported as
 `unsupported verb` by the skill; a missing file is reported as `unsupported language`.
 Never leave a guess in here: a wrong command is worse than `none`.
@@ -58,7 +58,7 @@ Read: exit code; on failure list failing test names only.
 ### coverage
 
 Must write a machine-readable report in **LCOV** (`lcov.info`) or **Cobertura XML**. The
-diff-coverage step in the `toolchain` skill is language-free and only understands those two.
+diff-coverage step in the `gist-toolchain` skill is language-free and only understands those two.
 
 ```
 none

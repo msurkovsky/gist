@@ -1,5 +1,5 @@
 ---
-name: mr-reply
+name: gist-mr-reply
 description: Answer review comments on a merge request. Fetches the live discussion, drops threads that need no reply, fixes first, then posts short outcome-first replies with hashes that exist on origin.
 disable-model-invocation: true
 ---

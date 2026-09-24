@@ -13,7 +13,7 @@ josh clone <this repo> ':workspace=views/<consumer>' <destination>
 Mapping syntax, one per line, `destination = :/source/path`:
 
 ```
-mr-reply = :/skills/mr-reply
+gist-mr-reply = :/skills/gist-mr-reply
 tdd = :/experimental/mattpocock/skills/engineering/tdd
 languages = :/languages
 ```
@@ -21,4 +21,4 @@ languages = :/languages
 Josh rewrites the file into a canonical nested form on the first push. That is expected.
 
 No views are defined yet. Suggested first ones: `claude` for `~/.claude/skills` on this
-machine, then one per project that should receive the `mr-*` family.
+machine, then one per project that should receive the `gist-mr-*` family.

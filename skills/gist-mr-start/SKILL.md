@@ -1,5 +1,5 @@
 ---
-name: mr-start
+name: gist-mr-start
 description: Start a branch that will be reviewed. Fixes ticket id, type, branch name, and commit convention before the first commit, and installs the guards that keep them.
 disable-model-invocation: true
 ---
@@ -48,12 +48,12 @@ Typed convention only:
 git config branch.<branch>.mrType <type>
 ```
 
-The `commit-msg` hook from my-skills enforces the generic style everywhere and the typed
+The `commit-msg` hook from gist enforces the generic style everywhere and the typed
 pattern where `mr.commitPattern` is set. Offer to install it if `.git/hooks/commit-msg` is
 absent:
 
 ```
-ln -sf <my-skills>/hooks/commit-msg.sh .git/hooks/commit-msg
+ln -sf <gist>/hooks/commit-msg.sh .git/hooks/commit-msg
 ```
 
 ## 4. State the rules for this branch
@@ -62,8 +62,8 @@ Tell the user, in four lines, what the branch is bound to:
 
 - branch name and base
 - commit style, and the fixed type if the project uses one
-- after any rebase: run the `toolchain` skill with `install`, `typecheck`, `test`, and check
+- after any rebase: run the `gist-toolchain` skill with `install`, `typecheck`, `test`, and check
   whether regenerated code made a hand-written type obsolete
-- before opening the MR: run `/mr-ready`
+- before opening the MR: run `/gist-mr-ready`
 
 No further prose.

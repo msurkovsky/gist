@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Git commit-msg hook: clear, short subject; blank line; body wrapped at a sane width.
 #
-# Install into any repo:  ln -sf /path/to/my-skills/hooks/commit-msg.sh .git/hooks/commit-msg
+# Install into any repo:  ln -sf /path/to/gist/hooks/commit-msg.sh .git/hooks/commit-msg
 #
 # Default rules (all repos):
 #   - subject non-empty, starts with an uppercase letter, no trailing period
@@ -12,7 +12,7 @@
 # Opt-in project convention (only when the project sets it):
 #   git config mr.commitPattern '^([a-z]+)\(([A-Za-z]+-?[0-9]+)\): .+'
 #     subject must match; capture group 1 is the type
-#   git config branch.<name>.mrType <type>    (set by /mr-start when the project uses types)
+#   git config branch.<name>.mrType <type>    (set by /gist-mr-start when the project uses types)
 #     commits on that branch must use that type
 #
 # Merge, fixup!, squash!, and Revert commits are exempt.

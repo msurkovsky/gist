@@ -1,5 +1,5 @@
 ---
-name: mr-close
+name: gist-mr-close
 description: Close or supersede a merge request without losing replies or history. Backs up before any rewrite, proves the tree unchanged, posts before closing, deletes the branch last.
 disable-model-invocation: true
 ---
@@ -32,9 +32,9 @@ until it is explained or reverted. Keep the backup ref until the new MR is merge
 
 ## 3. Supersede sequence
 
-1. Push the new branch, open the new MR (`/mr-ready` first).
+1. Push the new branch, open the new MR (`/gist-mr-ready` first).
 2. Fetch the old MR's discussion live. Anything still open gets its answer in the closing
-   comment, following `/mr-reply` rules.
+   comment, following `/gist-mr-reply` rules.
 3. Post one closing comment on the old MR: the new MR number, then the answers to the still
    open threads. One comment, no essay.
 4. Close the old MR.

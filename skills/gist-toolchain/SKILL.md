@@ -1,5 +1,5 @@
 ---
-name: toolchain
+name: gist-toolchain
 description: Run language-specific checks without knowing the language. Use when a task needs to install dependencies, typecheck, lint, run tests, measure coverage of changed lines, find dead code, or prove a new test fails without its fix. Resolves commands from languages/<lang>/toolchain.md and answers "unsupported" instead of guessing.
 ---
 
@@ -15,7 +15,7 @@ Verbs: `install`, `typecheck`, `lint`, `test`, `coverage`, `dead-code`, `prove-r
 
 Resolve `languages/` in this order and use the first that exists:
 
-1. `../../languages/` relative to this skill's directory (the my-skills checkout).
+1. `../../languages/` relative to this skill's directory (a gist checkout).
 2. `.claude/languages/` in the project.
 3. `~/.claude/languages/`.
 
