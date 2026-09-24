@@ -52,11 +52,12 @@ cmd_add() {
   local name="${1:-}" url="${2:-}" branch="${3:-main}"
   [ -n "$name" ] && [ -n "$url" ] || die "usage: vendor.sh add <name> <url> [branch]"
   [[ "$name" =~ ^[a-z0-9._-]+$ ]] || die "name must be [a-z0-9._-]"
+  [ -z "$(git status --porcelain)" ] || die "working tree not clean; commit or stash first"
   touch "$CONF"
   grep -q "^$name " "$CONF" && die "$name already registered"
   echo "$name $url $branch" >> "$CONF"
+  git add "$CONF" && git commit -q -m "Register vendor $name" && echo "== registered $name in tools/vendors.conf"
   import_one "$name" "$url" "$branch"
-  git add "$CONF" && git commit -q -m "Register vendor $name" && echo "   registered in tools/vendors.conf"
 }
 
 cmd_update() {
