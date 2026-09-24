@@ -41,6 +41,12 @@ Skills are the product. Tools exist to serve them. `README.md` has the layout,
 Rust for anything a skill depends on at run time. The compiler is the reviewer,
 and startup cost matters when a tool is called every turn.
 
+A custom tool is a `gk` subcommand, Rust under `tools/`; read
+`docs/tool-contract.md` first. Bash is fine only for a one-liner: one command
+or pipeline, no branching, no loops, no argument parsing. Once a script grows
+past that, port it to `gk` instead of growing the script. `scripts/` and
+`hooks/` still carry longer shell from before this rule; `TODO.md` tracks it.
+
 Shell is allowed in two places: `scripts/`, which only contributors run, and
 `hooks/`, which target repos install by symlink without `gk` on PATH. Keep both
 bash 3.2 compatible (macOS ships it): no `mapfile`, no `\|` in sed.

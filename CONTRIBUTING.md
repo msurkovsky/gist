@@ -72,6 +72,14 @@ cp -r languages/_template languages/<lang>
 Fill `## Detect` with the manifest file names, then each verb with a command and how to
 read its output. A verb with no tool stays `none`. Nothing under `skills/` changes.
 
+## Add a tool
+
+A tool is a `gk` subcommand in Rust. `docs/tool-contract.md` lists the steps and the
+output, exit-code, and behaviour rules. A bash script is acceptable only while it stays a
+one-liner: one command or pipeline, no branching, no loops, no argument parsing. Put it
+under `scripts/` behind a `just` recipe. When it outgrows that, port it to `gk` rather than
+growing the script.
+
 ## Add a rule
 
 `rules/<topic>.md`, language-agnostic, short imperative lines. If the rule only holds for

@@ -29,3 +29,10 @@ Pick up here: read the plan file, confirm still wanted, implement (TDD).
   machine, then one per project that should receive the `gist-mr-*` family.
 - Wire `hooks/post-rebase-nag.sh` into `~/.claude/settings.json`.
 
+## Later: port the shell under `scripts/` to `gk`
+
+- `scripts/check.sh`, `scripts/vendor.sh`, and `scripts/link.sh` predate the
+  rule that anything beyond a bash one-liner is a `gk` subcommand. Candidates:
+  `gk check`, `gk vendor`, `gk link`; the `just` recipes keep their names.
+- `hooks/*.sh` follow once `gk` is on PATH in target repos, which is the
+  `gk hook install` question above.
