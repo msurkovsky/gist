@@ -75,8 +75,10 @@ picking neither is a refusal, not a guess (see
 `--experimental` skills land under `<package>-` names for the same reason,
 regardless of which target(s) they're installed into.
 
-Every `init` run writes a manifest (`<target>/.gist-manifest.json`) recording
-exactly what it placed. `--uninstall` reads that manifest and removes what it
+`init` writes a manifest (`<target>/.gist-manifest.json`) recording the files it
+placed and any it found already identical, also when a run fails partway. A run
+refused before it starts, over a corrupt manifest or a symlink, writes none.
+`--uninstall` reads that manifest and removes what it
 recorded — files edited since install are left in place and reported, again
 overridable with `--force` — instead of re-deriving a removal list from
 whichever skills the running binary currently embeds (see

@@ -250,7 +250,7 @@ impl ManifestPath {
     }
 }
 
-/// A record of exactly what one `init` run placed at a target root — the
+/// A file `init` placed, or found already identical, at a target root — the
 /// source of truth `--uninstall` acts on, independent of whatever the
 /// currently running binary's embedded skills happen to be.
 #[derive(Debug, Clone, Serialize, Deserialize)]

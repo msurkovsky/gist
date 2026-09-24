@@ -68,8 +68,10 @@ rather than needing a Codex-specific reason to exist.
 ## Decision
 
 `gk init` gains `--codex`, parallel to `--claude`. Any combination of
-`--claude`, `--codex`, `--experimental=<package>` may be passed in one call;
-at least one is still required, same refusal as today otherwise. For each
+`--claude`, `--codex`, `--experimental=<package>` may be passed in one call,
+but at least one of `--claude`/`--codex` is required: `--experimental` says
+what to install, not where, and with two targets there is no default to fall
+back on, so it alone is refused like no flags at all. For each
 selected target root — `.claude/skills` for `--claude`, `.agents/skills` for
 `--codex` — the same computed bytes are placed: canonical skills unmodified,
 experimental packages name-prefixed once per package, not once per target.
@@ -102,8 +104,10 @@ proposed here is Codex-specific beyond the root path itself.
 
 ## Verification
 
-To add in `tests/cli.rs`, mirroring the `--claude`/`--experimental` tests
-already there: `init_codex_installs_into_agents_skills`,
-`init_claude_and_codex_together_install_both_with_identical_content`,
-`init_codex_experimental_reuses_the_0005_prefix_rewrite`, and confirming
-`init` with none of `--claude`/`--codex`/`--experimental` still refuses.
+`tests/cli.rs`, mirroring the `--claude`/`--experimental` tests:
+`init_codex_installs_into_dot_agents_skills`,
+`init_claude_and_codex_together_install_identical_content_into_both`,
+`init_codex_experimental_reuses_the_prefix_rewrite`,
+`init_codex_is_idempotent_on_a_second_run`,
+`init_without_a_target_is_a_refusal_not_misuse`, and
+`init_experimental_alone_is_still_a_refusal_no_implicit_target`.
