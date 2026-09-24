@@ -87,8 +87,12 @@ has already been broken more than once. Add a smoke test line to `tools/check.sh
 
 ## Commits
 
-- Subject: plain imperative sentence, capitalised, no conventional-commit prefix.
-- Body: why, not what. The diff shows what.
+- Subject: plain imperative sentence, capitalised, no trailing period, no
+  conventional-commit prefix. Under 50 characters reads best, 72 is the hard limit.
+- Blank line, then a body that says why, not what. The diff shows what. Wrap at 72.
+  A one-line change with an obvious reason needs no body.
+- `hooks/commit-msg.sh` enforces this. Install it here once:
+  `ln -sf ../../hooks/commit-msg.sh .git/hooks/commit-msg`.
 - One concern per commit. Vendor imports and registry entries are separate commits by
   construction; do not fold other changes into them.
 - Run `tools/check.sh` first. It exits non-zero on any rule violation.

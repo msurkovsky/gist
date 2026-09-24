@@ -65,4 +65,7 @@ exits non-zero on a violation. Rules that are easy to break:
   not by relative file links across skill folders.
 - `views/<consumer>/workspace.josh` must be committed here before the consumer runs
   `josh clone`. Cloning a path that does not exist yet fails.
-- Commit subjects are plain imperative sentences. No conventional-commit prefixes in this repo.
+- Commit subjects are plain imperative sentences, under 50 characters where possible, 72
+  hard limit, no trailing period, no conventional-commit prefix. Blank line, then a body
+  wrapped at 72 that says why. Typed conventions like `feat(ID):` belong to individual
+  projects, never here.

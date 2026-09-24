@@ -20,8 +20,9 @@ Base is `origin/<target branch>`, never a mid-branch commit. Range for everythin
 
 ## 2. Commit hygiene
 
-- Every commit in the range matches the project's commit pattern.
-- One type across the branch. Read `git config branch.<name>.mrType` when set.
+- Every commit in the range has a short subject and a body that says why. Where the project
+  defines a pattern (`git config mr.commitPattern`), every subject matches it and one type
+  runs across the branch (`git config branch.<name>.mrType`).
 - No `fixup!`, `squash!`, or WIP commits left. If history must be rewritten, follow the
   backup-ref rule from `/mr-close` first.
 

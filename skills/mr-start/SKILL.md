@@ -20,24 +20,37 @@ Look in `CLAUDE.md`, `.claude/rules/`, `CONTRIBUTING*`, and the forge config for
 
 Defaults when the project says nothing:
 
+- branch: `<ID>-<subject>` when there is a ticket, else `<subject>`
+- commit: short subject (under 50 characters, 72 hard limit), uppercase start, no period,
+  blank line, then a body that says why, wrapped at 72
+
+Only when the project defines a typed convention (for example `<type>(<ID>): subject`):
+
 - branch: `<type>/<ID>-<subject>`
-- commit: `<type>(<ID>): <subject>`, one type for the whole branch
+- one type for the whole branch
+- the pattern is recorded for the hook: `git config mr.commitPattern '<regex>'`
 
 ## 2. Ask once
 
-One question with two answers: ticket id and type. Do not proceed without both. Never use a
-`private/` prefix for work meant to be reviewed.
+One question: ticket id, and the type if the project uses types. Do not proceed without
+what the project requires. Never use a `private/` prefix for work meant to be reviewed.
 
 ## 3. Create the branch
 
 ```
 git fetch origin
-git switch -c <type>/<ID>-<subject> origin/<base>
-git config branch.<type>/<ID>-<subject>.mrType <type>
+git switch -c <branch> origin/<base>
 ```
 
-The `mrType` config fixes the type for this branch. The `commit-msg` hook from my-skills
-rejects any other type. Offer to install the hook if `.git/hooks/commit-msg` is absent:
+Typed convention only:
+
+```
+git config branch.<branch>.mrType <type>
+```
+
+The `commit-msg` hook from my-skills enforces the generic style everywhere and the typed
+pattern where `mr.commitPattern` is set. Offer to install it if `.git/hooks/commit-msg` is
+absent:
 
 ```
 ln -sf <my-skills>/hooks/commit-msg.sh .git/hooks/commit-msg
@@ -48,7 +61,7 @@ ln -sf <my-skills>/hooks/commit-msg.sh .git/hooks/commit-msg
 Tell the user, in four lines, what the branch is bound to:
 
 - branch name and base
-- commit format and the fixed type
+- commit style, and the fixed type if the project uses one
 - after any rebase: run the `toolchain` skill with `install`, `typecheck`, `test`, and check
   whether regenerated code made a hand-written type obsolete
 - before opening the MR: run `/mr-ready`

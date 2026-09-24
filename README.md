@@ -156,8 +156,10 @@ land in `experimental/` and violate the no-edit rule; adopt first.
 
 ## Hooks
 
-- `hooks/commit-msg.sh`: git hook. Enforces `<type>(<ID>): subject` and one type per branch
-  via `git config branch.<name>.mrType`. Install per project:
+- `hooks/commit-msg.sh`: git hook. Enforces a short subject (72 max, note above 50),
+  uppercase start, no trailing period, blank line, body wrapped at 72. A project that uses a
+  typed convention opts in with `git config mr.commitPattern '<regex>'`, and one type per
+  branch with `git config branch.<name>.mrType`. Install per project:
   `ln -sf <this repo>/hooks/commit-msg.sh .git/hooks/commit-msg`.
 - `hooks/post-rebase-nag.sh`: Claude Code `PostToolUse` hook on `Bash`. After a rebase,
   prints the re-install, regenerate, retest reminder. Wire it in `settings.json`.

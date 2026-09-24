@@ -57,8 +57,12 @@ dash="$(grep -rn -- '—' README.md CLAUDE.md CONTRIBUTING.md rules skills langu
 [ -z "$dash" ] && ok "no em-dashes in owned prose" || { bad "em-dashes found:"; printf '%s\n' "$dash" | sed 's/^/      /'; }
 
 # 8  hook smoke tests
-t="$(mktemp)"; printf 'feat(ABC-123): x\n' > "$t"; hooks/commit-msg.sh "$t" 2>/dev/null && ok "commit-msg accepts valid" || bad "commit-msg rejects valid message"
-printf 'added thing\n' > "$t"; hooks/commit-msg.sh "$t" 2>/dev/null && bad "commit-msg accepts invalid" || ok "commit-msg rejects invalid"
+t="$(mktemp)"
+printf 'Add thing\n\nBecause it was missing.\n' > "$t"; hooks/commit-msg.sh "$t" 2>/dev/null && ok "commit-msg accepts generic style" || bad "commit-msg rejects generic style"
+printf 'add thing.\n' > "$t"; hooks/commit-msg.sh "$t" 2>/dev/null && bad "commit-msg accepts lowercase with period" || ok "commit-msg rejects lowercase with period"
+printf 'Add thing\nno blank line\n' > "$t"; hooks/commit-msg.sh "$t" 2>/dev/null && bad "commit-msg accepts missing blank line" || ok "commit-msg rejects missing blank line"
+printf 'feat(ABC-1): add thing\n' > "$t"
+GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=mr.commitPattern GIT_CONFIG_VALUE_0='^([a-z]+)\(([A-Za-z]+-?[0-9]+)\): .+' hooks/commit-msg.sh "$t" 2>/dev/null && ok "commit-msg honours opt-in project pattern" || bad "commit-msg rejects opt-in pattern match"
 rm -f "$t"
 echo '{"tool_input":{"command":"git pull --rebase origin main"}}' | hooks/post-rebase-nag.sh | grep -q 'Rebase detected' && ok "post-rebase-nag fires" || bad "post-rebase-nag silent on rebase"
 [ -z "$(echo '{"tool_input":{"command":"git rebase --abort"}}' | hooks/post-rebase-nag.sh)" ] && ok "post-rebase-nag silent on abort" || bad "post-rebase-nag fires on abort"
