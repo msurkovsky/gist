@@ -866,6 +866,35 @@ fn rerunning_without_experimental_keeps_earlier_experimental_files_tracked() {
 }
 
 #[test]
+fn an_io_failure_partway_still_records_the_files_already_placed() {
+    let repo = Repo::new();
+    // A file where a skill directory belongs: skills before it place fine,
+    // then the run fails on this one.
+    repo.write(".claude/skills/gist-outline", "in the way");
+
+    let (code, _, stderr) = repo.gk(&["init", "--claude", "--json"]);
+    assert_eq!(code, 1);
+    let value: Value = serde_json::from_str(&stderr).expect("error envelope on stderr");
+    assert_eq!(value["status"], "error");
+    let message = value["message"].as_str().expect("message");
+    assert!(message.contains("gist-outline"), "got: {message}");
+
+    let manifest = manifest(&repo, ".claude/skills");
+    let files = manifest["files"].as_array().expect("files array");
+    let paths: Vec<&str> = files.iter().map(|f| f["path"].as_str().unwrap()).collect();
+    assert!(paths.contains(&"gist-doc-review/SKILL.md"));
+    assert!(!paths.iter().any(|p| p.starts_with("gist-outline")));
+
+    let data = repo.data(&["init", "--claude", "--uninstall"]);
+    assert_eq!(data["totals"]["removed"], files.len() as u64);
+    assert!(!repo.path().join(".claude/skills/gist-doc-review").exists());
+    assert_eq!(
+        std::fs::read_to_string(repo.path().join(".claude/skills/gist-outline")).expect("read"),
+        "in the way"
+    );
+}
+
+#[test]
 fn init_refuses_to_overwrite_a_corrupt_manifest() {
     let repo = Repo::new();
     repo.write(".claude/skills/.gist-manifest.json", "not json");

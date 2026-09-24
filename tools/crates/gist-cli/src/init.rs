@@ -295,11 +295,18 @@ pub fn run(args: Args) -> Result<Report, String> {
             }
         };
 
-        for item in &items {
+        let mut placing: Result<(), String> = Ok(());
+        'items: for item in &items {
             let mut file_reports = Vec::with_capacity(item.files.len());
             for file in &item.files {
                 let target = root_path.join(&file.path);
-                let status = place(&target, &file.contents, args.force)?;
+                let status = match place(&target, &file.contents, args.force) {
+                    Ok(status) => status,
+                    Err(err) => {
+                        placing = Err(err);
+                        break 'items;
+                    }
+                };
                 totals.record(status);
                 target_totals.record(status);
 
@@ -323,11 +330,16 @@ pub fn run(args: Args) -> Result<Report, String> {
             });
         }
 
+        // Written even when placing failed partway: the files already on
+        // disk are gk's, and an untracked file is one `--uninstall` can
+        // never remove. The placing error is the one worth reporting.
         let entries = manifest_entries
             .into_iter()
             .map(|(path, sha256)| ManifestEntry { path, sha256 })
             .collect();
-        write_manifest(root_path, entries)?;
+        let written = write_manifest(root_path, entries);
+        placing?;
+        written?;
 
         targets.push(TargetReport {
             target: root.to_string(),

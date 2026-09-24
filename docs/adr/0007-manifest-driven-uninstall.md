@@ -89,7 +89,8 @@ name.
 ## Decision
 
 Write `<root>/.gist-manifest.json` on every `init` run, per selected target
-root. `--uninstall` reads the manifest for each selected root and acts only
+root, including a run that fails partway, so files placed before the error
+stay removable. `--uninstall` reads the manifest for each selected root and acts only
 on it, independent of the embedded skill trees and independent of the other
 selected root, if any.
 
