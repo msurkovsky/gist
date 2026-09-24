@@ -546,6 +546,113 @@ fn init_claude_human_output_lists_each_skill_and_file() {
     assert!(!stdout.starts_with('{'));
 }
 
+/// Number of files under every skill directory (one containing `SKILL.md`
+/// directly) inside `experimental/<package>/skills/`, recursively — mirrors
+/// what `init --experimental` itself walks, ignoring stray files like a
+/// category's `README.md` that sit alongside skill dirs but aren't one.
+fn experimental_skill_file_count(package: &str) -> u64 {
+    fn walk(dir: &Path, n: &mut u64) {
+        if dir.join("SKILL.md").is_file() {
+            fn count_all(dir: &Path, n: &mut u64) {
+                for entry in std::fs::read_dir(dir).expect("read dir") {
+                    let path = entry.expect("dir entry").path();
+                    if path.is_dir() {
+                        count_all(&path, n);
+                    } else {
+                        *n += 1;
+                    }
+                }
+            }
+            count_all(dir, n);
+            return;
+        }
+        for entry in std::fs::read_dir(dir).expect("read dir") {
+            let path = entry.expect("dir entry").path();
+            if path.is_dir() {
+                walk(&path, n);
+            }
+        }
+    }
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../../experimental")
+        .join(package)
+        .join("skills");
+    let mut n = 0;
+    walk(&root, &mut n);
+    n
+}
+
+#[test]
+fn init_experimental_installs_a_vendored_package_prefixed() {
+    let repo = Repo::new();
+    let data = repo.data(&["init", "--experimental=mattpocock"]);
+
+    assert_eq!(
+        data["totals"]["installed"],
+        experimental_skill_file_count("mattpocock")
+    );
+    assert_eq!(data["totals"]["conflicts"], 0);
+
+    let skill_md = repo.path().join(".claude/skills/mattpocock-tdd/SKILL.md");
+    assert!(skill_md.exists());
+    assert!(std::fs::read_to_string(&skill_md)
+        .expect("read")
+        .contains("name: mattpocock-tdd"));
+
+    let reference = repo.path().join(".claude/skills/mattpocock-tdd/mocking.md");
+    assert!(reference.exists());
+
+    // Nothing lands unprefixed, and no bare `.claude/skills/tdd/` appears.
+    assert!(!repo.path().join(".claude/skills/tdd").exists());
+}
+
+#[test]
+fn init_experimental_is_idempotent_on_a_second_run() {
+    let repo = Repo::new();
+    repo.data(&["init", "--experimental=mattpocock"]);
+    let data = repo.data(&["init", "--experimental=mattpocock"]);
+
+    assert_eq!(data["totals"]["installed"], 0);
+    assert_eq!(
+        data["totals"]["unchanged"],
+        experimental_skill_file_count("mattpocock")
+    );
+    assert_eq!(data["totals"]["conflicts"], 0);
+}
+
+#[test]
+fn init_experimental_unknown_package_names_what_is_available() {
+    let repo = Repo::new();
+    let (code, _, stderr) = repo.gk(&["init", "--experimental=nope", "--json"]);
+
+    assert_eq!(code, 1, "expected refusal, not misuse");
+    let value: Value = serde_json::from_str(&stderr).expect("error envelope on stderr");
+    assert_eq!(value["status"], "error");
+    let message = value["message"].as_str().expect("message");
+    assert!(message.contains("nope"), "got: {message}");
+    assert!(message.contains("mattpocock"), "got: {message}");
+}
+
+#[test]
+fn init_claude_and_experimental_together_install_both() {
+    let repo = Repo::new();
+    let data = repo.data(&["init", "--claude", "--experimental=mattpocock"]);
+
+    assert_eq!(
+        data["totals"]["installed"],
+        embedded_skill_file_count() + experimental_skill_file_count("mattpocock")
+    );
+
+    assert!(repo
+        .path()
+        .join(".claude/skills/gist-outline/SKILL.md")
+        .exists());
+    assert!(repo
+        .path()
+        .join(".claude/skills/mattpocock-tdd/SKILL.md")
+        .exists());
+}
+
 #[test]
 fn a_renamed_file_counts_only_what_changed_in_it() {
     let repo = Repo::new();

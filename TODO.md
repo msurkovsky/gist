@@ -25,12 +25,10 @@ Pick up here: read the plan file, confirm still wanted, implement (TDD).
   `.claude/languages/` exists, and installs the commit-msg hook by symlink to a
   gist checkout. Decide whether `init` should place them and whether a
   `gk hook install` subcommand replaces the symlink.
-- Vendored skills under `experimental/` never reach a target repo: `init.rs`
-  embeds `skills/` alone (`include_dir!(".../skills")`), and the frontmatter
-  test there requires a `gist-` prefixed name, which upstream copies lack.
-  Today the only routes are adopting the skill into `skills/gist-<name>/`, a
-  Josh view, or `scripts/link.sh` on one machine. Decide whether that stays
-  the answer or whether `init` grows a way to carry unadopted vendors.
+- Done: `gk init --experimental=<package>` vendors an `experimental/<name>`
+  tree's skills into `.claude/skills/<name>-<skill>/`, prefixed at install
+  time so a bare upstream name (`tdd`, `retro`) can't collide. See
+  `docs/adr/0005-prefix-experimental-skills-at-install.md`.
 - First view: `views/claude/workspace.josh` for `~/.claude/skills` on this
   machine, then one per project that should receive the `gist-mr-*` family.
 - Wire `hooks/post-rebase-nag.sh` into `~/.claude/settings.json`.

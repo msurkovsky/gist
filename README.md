@@ -58,14 +58,16 @@ just install   # put gk on PATH
 ## Use
 
 ```bash
-gk outline .        # what shape is this repo
-gk doc              # how much of my change is documentation
-gk init --claude    # vendor the skills into ./.claude/skills/ of the repo you are in
+gk outline .                       # what shape is this repo
+gk doc                             # how much of my change is documentation
+gk init --claude                   # vendor the skills into ./.claude/skills/ of the repo you are in
+gk init --experimental=mattpocock  # vendor one experimental/ package's skills too
 ```
 
 `init` is idempotent and never overwrites a file you edited — it reports a
 conflict instead; `--force` overrides. Skills land under their `gist-` names so
-they cannot shadow one the target repo already has.
+they cannot shadow one the target repo already has; `--experimental` skills land
+under `<package>-` names for the same reason.
 
 ## Composition
 
@@ -113,9 +115,11 @@ josh clone <path-or-url-of-this-repo> ':workspace=views/<consumer>' <destination
 ```
 
 Inside the projection: `git commit` as usual, `josh push` to write back here, `josh changes
-pull` to take this repo's changes. Views are the only way to try a skill from
-`experimental/` in a project; `gk init --claude` vendors `skills/` alone. Edits to vendored
-paths made through a view violate the no-edit rule; adopt first.
+pull` to take this repo's changes. A view is still the only way to work on an
+`experimental/` tree's own history; `gk init --experimental=<package>` gets a project its
+skills without one, name-prefixed by package (see
+`docs/adr/0005-prefix-experimental-skills-at-install.md`). Edits to vendored paths made
+through a view violate the no-edit rule; adopt first.
 
 ## Languages
 
