@@ -418,6 +418,116 @@ fn gitignored_files_are_not_mistaken_for_new_work() {
 }
 
 #[test]
+fn init_claude_installs_the_embedded_skills_into_dot_claude() {
+    let repo = Repo::new();
+    let data = repo.data(&["init", "--claude"]);
+
+    assert_eq!(data["totals"]["installed"], 3);
+    assert_eq!(data["totals"]["conflicts"], 0);
+
+    let outline = repo.path().join(".claude/skills/gist-outline/SKILL.md");
+    assert!(outline.exists());
+    assert!(std::fs::read_to_string(&outline)
+        .expect("read")
+        .contains("name: gist-outline"));
+
+    let reference = repo
+        .path()
+        .join(".claude/skills/gist-doc-review/references/public-surface.md");
+    assert!(reference.exists());
+}
+
+#[test]
+fn init_claude_is_idempotent_on_a_second_run() {
+    let repo = Repo::new();
+    repo.data(&["init", "--claude"]);
+    let data = repo.data(&["init", "--claude"]);
+
+    assert_eq!(data["totals"]["installed"], 0);
+    assert_eq!(data["totals"]["unchanged"], 3);
+    assert_eq!(data["totals"]["conflicts"], 0);
+}
+
+#[test]
+fn init_without_claude_is_a_refusal_not_misuse() {
+    let repo = Repo::new();
+    let (code, _, stderr) = repo.gk(&["init", "--json"]);
+
+    assert_eq!(code, 1, "expected refusal, not misuse");
+    let value: Value = serde_json::from_str(&stderr).expect("error envelope on stderr");
+    assert_eq!(value["status"], "error");
+    assert!(
+        value["message"]
+            .as_str()
+            .expect("message")
+            .contains("--claude"),
+        "got: {}",
+        value["message"]
+    );
+}
+
+#[test]
+fn init_claude_reports_a_conflict_and_leaves_the_file_untouched() {
+    let repo = Repo::new();
+    repo.data(&["init", "--claude"]);
+    repo.write(".claude/skills/gist-outline/SKILL.md", "locally modified\n");
+
+    let (code, stdout, _) = repo.gk(&["init", "--claude", "--json"]);
+    assert_eq!(code, 1);
+    let value: Value = serde_json::from_str(&stdout).expect("stdout is json");
+    assert_eq!(value["status"], "ok");
+    assert_eq!(value["data"]["totals"]["conflicts"], 1);
+
+    let contents =
+        std::fs::read_to_string(repo.path().join(".claude/skills/gist-outline/SKILL.md"))
+            .expect("read");
+    assert_eq!(contents, "locally modified\n");
+}
+
+#[test]
+fn init_claude_force_overwrites_a_conflicting_file() {
+    let repo = Repo::new();
+    repo.data(&["init", "--claude"]);
+    repo.write(".claude/skills/gist-outline/SKILL.md", "locally modified\n");
+
+    let data = repo.data(&["init", "--claude", "--force"]);
+    assert_eq!(data["totals"]["overwritten"], 1);
+    assert_eq!(data["totals"]["conflicts"], 0);
+
+    let contents =
+        std::fs::read_to_string(repo.path().join(".claude/skills/gist-outline/SKILL.md"))
+            .expect("read");
+    assert!(contents.contains("name: gist-outline"));
+}
+
+#[test]
+fn init_claude_needs_no_git_repository() {
+    let dir = TempDir::new().expect("temp dir");
+    let output = Command::new(env!("CARGO_BIN_EXE_gk"))
+        .args(["init", "--claude", "--json"])
+        .current_dir(dir.path())
+        .output()
+        .expect("run gk");
+
+    assert!(output.status.success(), "should not touch git at all");
+    assert!(dir
+        .path()
+        .join(".claude/skills/gist-outline/SKILL.md")
+        .exists());
+}
+
+#[test]
+fn init_claude_human_output_lists_each_skill_and_file() {
+    let repo = Repo::new();
+    let (code, stdout, _) = repo.gk(&["init", "--claude"]);
+
+    assert_eq!(code, 0);
+    assert!(stdout.contains("gist-outline"), "got: {stdout}");
+    assert!(stdout.contains("installed"), "got: {stdout}");
+    assert!(!stdout.starts_with('{'));
+}
+
+#[test]
 fn a_renamed_file_counts_only_what_changed_in_it() {
     let repo = Repo::new();
     let body: String = (0..40)

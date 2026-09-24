@@ -4,10 +4,11 @@
 //! defaults lean that way: no prompts, no spinners, bounded output.
 
 mod doc;
+mod init;
 mod outline;
 
 use clap::{Parser, Subcommand};
-use gist_core::{emit, exit, fail};
+use gist_core::{emit, emit_status, exit, fail};
 use std::path::PathBuf;
 use std::process::ExitCode;
 
@@ -45,6 +46,9 @@ enum Command {
 
     /// Measure how much of a change is documentation
     Doc(doc::Args),
+
+    /// Vendor this project's Claude Code skills into ./.claude/skills/
+    Init(init::Args),
 }
 
 fn main() -> ExitCode {
@@ -56,6 +60,18 @@ fn main() -> ExitCode {
             .map_err(|message| fail(message, exit::FAILURE, cli.json)),
         Command::Doc(args) => doc::run(args)
             .map(|report| emit(report, cli.json))
+            .map_err(|message| fail(message, exit::FAILURE, cli.json)),
+        // A conflict is a successful measurement, not a run failure — `emit`
+        // always signals success, so exit code comes from the report itself.
+        Command::Init(args) => init::run(args)
+            .map(|report| {
+                let code = if report.has_conflicts() {
+                    exit::FAILURE
+                } else {
+                    exit::OK
+                };
+                emit_status(report, code, cli.json)
+            })
             .map_err(|message| fail(message, exit::FAILURE, cli.json)),
     };
 

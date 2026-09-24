@@ -14,6 +14,7 @@ gist-core = { workspace = true }
 clap = { workspace = true }
 git2 = { workspace = true }
 ignore = { workspace = true }
+include_dir = { workspace = true }
 serde = { workspace = true }
 
 [dev-dependencies]
