@@ -40,3 +40,27 @@ Without `just`: `cargo <cmd> --manifest-path tools/Cargo.toml`.
 - Tools never prompt, never spin, never emit unbounded output.
 - Every output type implements `Human` and `Serialize`. No exceptions.
 - Test the failure path. The happy path is the easy half.
+
+<!-- Imported from my-skills. Consolidated with the sections above in a follow-up commit. -->
+
+# Working in this repository
+
+Read `README.md` for the layout and lifecycle. Rules that are easy to break:
+
+- Never edit anything under `experimental/`. It is vendored upstream history. To change a
+  vendored skill, copy it into `skills/<name>/` first, note the source in its frontmatter,
+  then edit the copy. `tools/vendor.sh check` finds violations.
+- Never put language-specific commands into a skill. They go into
+  `languages/<lang>/toolchain.md`. A skill that needs them calls the `toolchain` skill.
+  Missing language or verb is reported as `unsupported`, never guessed.
+- New language: copy `languages/_template/` to `languages/<lang>/` and fill every verb or
+  mark it `none`. No skill changes are needed.
+- Vendors are added and updated only through `tools/vendor.sh`. Do not `git merge` upstream
+  by hand and do not use `git subtree` or submodules.
+- User-invoked skills carry `disable-model-invocation: true` and a human-facing one-line
+  description. Model-invoked skills carry trigger phrasing in the description.
+- Skills reference other skills by telling the agent to call the Skill tool with the name,
+  not by relative file links across skill folders.
+- `views/<consumer>/workspace.josh` must be committed here before the consumer runs
+  `josh clone`. Cloning a path that does not exist yet fails.
+- Commit subjects are plain imperative sentences. No conventional-commit prefixes in this repo.
