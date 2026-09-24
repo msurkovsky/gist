@@ -5,6 +5,7 @@
 //! git invocation, post-image lookup, the JSON envelope, and exit codes.
 
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 use std::path::Path;
 use std::process::{Command, Output};
 use tempfile::TempDir;
@@ -733,6 +734,54 @@ fn manifest(repo: &Repo, root: &str) -> Value {
     let text = std::fs::read_to_string(repo.path().join(root).join(".gist-manifest.json"))
         .expect("read manifest");
     serde_json::from_str(&text).expect("manifest is json")
+}
+
+fn sha256_hex(bytes: &[u8]) -> String {
+    format!("{:x}", Sha256::digest(bytes))
+}
+
+/// Plant a manifest naming one file, as a repo carrying its own would.
+fn plant_manifest(repo: &Repo, path: &str, sha256: &str) {
+    repo.write(
+        ".claude/skills/.gist-manifest.json",
+        &format!(r#"{{"gk_version":"x","files":[{{"path":{path:?},"sha256":"{sha256}"}}]}}"#),
+    );
+}
+
+#[test]
+fn uninstall_never_removes_a_file_outside_the_root_named_by_dotdot() {
+    let repo = Repo::new();
+    repo.write("victim.txt", "precious");
+    plant_manifest(&repo, "../../victim.txt", &sha256_hex(b"precious"));
+
+    repo.data(&["init", "--claude", "--uninstall"]);
+
+    assert!(repo.path().join("victim.txt").exists());
+}
+
+#[test]
+fn uninstall_never_removes_an_absolute_path_even_with_force() {
+    let repo = Repo::new();
+    let outside = TempDir::new().expect("temp dir");
+    let victim = outside.path().join("victim.txt");
+    std::fs::write(&victim, "precious").expect("write");
+    plant_manifest(&repo, victim.to_str().expect("utf8"), "not-the-hash");
+
+    repo.data(&["init", "--claude", "--uninstall", "--force"]);
+
+    assert!(victim.exists());
+}
+
+#[test]
+fn init_refuses_a_manifest_whose_paths_leave_the_root() {
+    let repo = Repo::new();
+    plant_manifest(&repo, "../../victim.txt", "any");
+
+    let (code, message) = repo.error(&["init", "--claude"]);
+
+    assert_eq!(code, 1);
+    assert!(message.contains("plain relative path"), "got: {message}");
+    assert!(!repo.path().join(".claude/skills/gist-outline").exists());
 }
 
 #[test]

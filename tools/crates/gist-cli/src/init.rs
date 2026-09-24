@@ -25,7 +25,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 static SKILLS: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/../../../skills");
 static EXPERIMENTAL: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/../../../experimental");
@@ -216,12 +216,47 @@ struct SkillItem {
     files: Vec<PlacedFile>,
 }
 
+/// A path under a target root: relative and made of plain components only,
+/// so joining it to the root can never leave the root. A manifest is data a
+/// repo can carry, so its paths are checked when parsed, not trusted.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(try_from = "String")]
+struct ManifestPath(String);
+
+impl TryFrom<String> for ManifestPath {
+    type Error = String;
+
+    fn try_from(path: String) -> Result<Self, String> {
+        let plain = !path.is_empty()
+            && Path::new(&path)
+                .components()
+                .all(|component| matches!(component, Component::Normal(_)));
+        if plain {
+            Ok(Self(path))
+        } else {
+            Err(format!(
+                "manifest path {path:?} is not a plain relative path"
+            ))
+        }
+    }
+}
+
+impl ManifestPath {
+    fn as_path(&self) -> &Path {
+        Path::new(&self.0)
+    }
+
+    fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
 /// A record of exactly what one `init` run placed at a target root — the
 /// source of truth `--uninstall` acts on, independent of whatever the
 /// currently running binary's embedded skills happen to be.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct ManifestEntry {
-    path: String,
+    path: ManifestPath,
     sha256: String,
 }
 
@@ -277,24 +312,25 @@ pub fn run(args: Args) -> Result<Report, String> {
         let mut target_totals = Totals::default();
         let mut skills = Vec::with_capacity(items.len());
         let manifest_path = root_path.join(MANIFEST_FILENAME);
-        let mut manifest_entries: BTreeMap<String, String> = match read_manifest(&manifest_path)? {
-            ManifestRead::Absent => BTreeMap::new(),
-            ManifestRead::Found(manifest) => manifest
-                .files
-                .into_iter()
-                .map(|entry| (entry.path, entry.sha256))
-                .collect(),
-            // Rebuilding over it would drop tracking of every file outside
-            // this run's selection without a word.
-            ManifestRead::Corrupt(reason) => {
-                return Err(format!(
-                    "{} is not a valid manifest ({reason}) — delete it to start \
+        let mut manifest_entries: BTreeMap<ManifestPath, String> =
+            match read_manifest(&manifest_path)? {
+                ManifestRead::Absent => BTreeMap::new(),
+                ManifestRead::Found(manifest) => manifest
+                    .files
+                    .into_iter()
+                    .map(|entry| (entry.path, entry.sha256))
+                    .collect(),
+                // Rebuilding over it would drop tracking of every file outside
+                // this run's selection without a word.
+                ManifestRead::Corrupt(reason) => {
+                    return Err(format!(
+                        "{} is not a valid manifest ({reason}) — delete it to start \
                      tracking afresh; files an earlier run placed will no longer \
                      be tracked",
-                    manifest_path.display()
-                ))
-            }
-        };
+                        manifest_path.display()
+                    ))
+                }
+            };
 
         let placing = (|| -> Result<(), String> {
             for item in &items {
@@ -312,7 +348,8 @@ pub fn run(args: Args) -> Result<Report, String> {
                     // or `--uninstall` would delete a file gk doesn't own.
                     let path = file.path.display().to_string();
                     if status != Status::Conflict {
-                        manifest_entries.insert(path.clone(), hash(&file.contents));
+                        manifest_entries
+                            .insert(ManifestPath::try_from(path.clone())?, hash(&file.contents));
                     }
 
                     file_reports.push(FileReport { path, status });
@@ -381,7 +418,7 @@ fn run_uninstall(roots: &[&str], force: bool) -> Result<UninstallReport, String>
         let mut dirs: BTreeSet<PathBuf> = BTreeSet::new();
 
         for entry in entries {
-            let target = root_path.join(&entry.path);
+            let target = root_path.join(entry.path.as_path());
 
             let status = match std::fs::read(&target) {
                 Err(err) if err.kind() == std::io::ErrorKind::NotFound => UninstallStatus::Missing,
@@ -398,7 +435,7 @@ fn run_uninstall(roots: &[&str], force: bool) -> Result<UninstallReport, String>
                 }
             };
 
-            if let Some(parent) = Path::new(&entry.path).parent() {
+            if let Some(parent) = entry.path.as_path().parent() {
                 for ancestor in parent.ancestors() {
                     if ancestor.as_os_str().is_empty() {
                         continue;
@@ -410,7 +447,7 @@ fn run_uninstall(roots: &[&str], force: bool) -> Result<UninstallReport, String>
             totals.record(status);
             target_totals.record(status);
             file_reports.push(UninstallFileReport {
-                path: entry.path.clone(),
+                path: entry.path.as_str().to_string(),
                 status,
             });
             if status == UninstallStatus::Kept {
@@ -750,6 +787,16 @@ impl Human for UninstallReport {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn manifest_paths_must_be_plain_and_relative() {
+        for good in ["a", "gist-outline/SKILL.md"] {
+            assert!(ManifestPath::try_from(good.to_string()).is_ok(), "{good}");
+        }
+        for bad in ["", "/", "/etc/passwd", "..", "../x", "a/../../x", "./a"] {
+            assert!(ManifestPath::try_from(bad.to_string()).is_err(), "{bad}");
+        }
+    }
 
     #[test]
     fn a_missing_target_is_installed() {
