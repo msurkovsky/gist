@@ -34,6 +34,17 @@ enum Envelope<T> {
 
 /// Write a successful result to stdout and return the process exit code.
 pub fn emit<T: Serialize + Human>(data: T, json: bool) -> ExitCode {
+    emit_status(data, exit::OK, json)
+}
+
+/// Write a successful result to stdout, exiting with `code` instead of `OK`.
+///
+/// The envelope is unconditionally `status: "ok"` — nothing failed to run,
+/// the report is complete. Some tools still need to stop a caller in its
+/// tracks over part of that report, e.g. a file conflict refused rather
+/// than resolved: `--json` gives the caller structured data either way, the
+/// exit code is the one bit that says "look before you continue".
+pub fn emit_status<T: Serialize + Human>(data: T, code: u8, json: bool) -> ExitCode {
     if json {
         match serde_json::to_string_pretty(&Envelope::Ok { data: &data }) {
             Ok(text) => println!("{text}"),
@@ -48,7 +59,7 @@ pub fn emit<T: Serialize + Human>(data: T, json: bool) -> ExitCode {
     } else {
         println!("{}", data.human());
     }
-    ExitCode::from(exit::OK)
+    ExitCode::from(code)
 }
 
 /// Write an error to stderr and return the process exit code.
