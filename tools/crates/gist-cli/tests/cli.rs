@@ -920,6 +920,7 @@ fn init_claude_writes_a_manifest_after_install() {
     repo.data(&["init", "--claude"]);
 
     let manifest = manifest(&repo, ".claude/skills");
+    assert_eq!(manifest["gk_version"], env!("CARGO_PKG_VERSION"));
     let files = manifest["files"].as_array().expect("files array");
     assert_eq!(files.len() as u64, embedded_skill_file_count());
 
@@ -1092,6 +1093,80 @@ fn init_claude_uninstall_with_a_corrupt_manifest_is_a_zero_op() {
     let data = repo.data(&["init", "--claude", "--uninstall"]);
     assert_eq!(data["totals"]["removed"], 0);
     assert_eq!(data["totals"]["kept"], 0);
+}
+
+#[test]
+fn a_modified_file_stays_protected_across_repeated_uninstalls() {
+    let repo = Repo::new();
+    repo.data(&["init", "--claude"]);
+    repo.write(".claude/skills/gist-outline/SKILL.md", "locally modified\n");
+
+    for run in 1..=2 {
+        let (code, data) = repo.data_with_code(&["init", "--claude", "--uninstall"]);
+        assert_eq!(code, 1, "run {run}");
+        assert_eq!(data["totals"]["kept"], 1, "run {run}");
+    }
+
+    let contents =
+        std::fs::read_to_string(repo.path().join(".claude/skills/gist-outline/SKILL.md"))
+            .expect("read");
+    assert_eq!(contents, "locally modified\n");
+}
+
+#[test]
+fn a_file_found_already_identical_is_recorded_and_later_uninstalled() {
+    let repo = Repo::new();
+    repo.data(&["init", "--claude"]);
+    std::fs::remove_file(repo.path().join(".claude/skills/.gist-manifest.json"))
+        .expect("remove manifest");
+
+    let data = repo.data(&["init", "--claude"]);
+    assert_eq!(data["totals"]["unchanged"], embedded_skill_file_count());
+
+    let manifest = manifest(&repo, ".claude/skills");
+    assert_eq!(
+        manifest["files"].as_array().expect("files").len() as u64,
+        embedded_skill_file_count()
+    );
+
+    let data = repo.data(&["init", "--claude", "--uninstall"]);
+    assert_eq!(data["totals"]["removed"], embedded_skill_file_count());
+}
+
+#[test]
+fn init_experimental_repeated_flag_installs_the_package_once() {
+    let repo = Repo::new();
+    let data = repo.data(&[
+        "init",
+        "--claude",
+        "--experimental=mattpocock",
+        "--experimental=mattpocock",
+    ]);
+
+    assert_eq!(
+        data["totals"]["installed"],
+        embedded_skill_file_count() + experimental_skill_file_count("mattpocock")
+    );
+    assert_eq!(data["totals"]["unchanged"], 0);
+}
+
+#[cfg(unix)]
+#[test]
+fn uninstall_refuses_a_manifest_that_is_a_symlink() {
+    let repo = Repo::new();
+    repo.data(&["init", "--claude"]);
+    let outside = TempDir::new().expect("temp dir");
+    let manifest_path = repo.path().join(".claude/skills/.gist-manifest.json");
+    let moved = outside.path().join("manifest.json");
+    std::fs::copy(&manifest_path, &moved).expect("copy");
+    std::fs::remove_file(&manifest_path).expect("remove");
+    std::os::unix::fs::symlink(&moved, &manifest_path).expect("symlink");
+
+    let (code, message) = repo.error(&["init", "--claude", "--uninstall"]);
+
+    assert_eq!(code, 1);
+    assert!(message.contains("symlink"), "got: {message}");
+    assert!(repo.path().join(".claude/skills/gist-outline").exists());
 }
 
 #[test]

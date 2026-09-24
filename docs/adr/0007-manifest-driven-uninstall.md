@@ -137,6 +137,9 @@ nothing on disk) with no I/O. `tests/cli.rs` end-to-end:
 `a_conflict_on_rerun_keeps_the_hash_the_first_run_recorded`,
 `rerunning_without_experimental_keeps_earlier_experimental_files_tracked`,
 `init_refuses_to_overwrite_a_corrupt_manifest`,
-`init_claude_uninstall_with_a_corrupt_manifest_is_a_zero_op`, and
-`an_io_failure_partway_still_records_the_files_already_placed`. The tests for
-untrusted manifests and symlinks are listed in ADR 0008.
+`init_claude_uninstall_with_a_corrupt_manifest_is_a_zero_op`,
+`an_io_failure_partway_still_records_the_files_already_placed`,
+`a_modified_file_stays_protected_across_repeated_uninstalls`, and
+`a_file_found_already_identical_is_recorded_and_later_uninstalled`.
+`init_claude_writes_a_manifest_after_install` also asserts `gk_version`. The
+tests for untrusted manifests and symlinks are listed in ADR 0008.

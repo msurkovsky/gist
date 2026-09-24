@@ -69,6 +69,9 @@ the list of packages that do, per the "never guessed" rule in `CLAUDE.md`.
 
 `init_experimental_installs_a_vendored_package_prefixed`,
 `init_experimental_is_idempotent_on_a_second_run`,
-`init_experimental_unknown_package_names_what_is_available`, and
-`init_claude_and_experimental_together_install_both` (all in
-`tests/cli.rs`).
+`init_experimental_unknown_package_names_what_is_available`,
+`init_claude_and_experimental_together_install_both`, and
+`init_experimental_repeated_flag_installs_the_package_once` (all in
+`tests/cli.rs`). `rewrite_skill_name` has unit tests in `init.rs`: it replaces
+only the frontmatter line, keeps a missing trailing newline missing, and errors
+rather than guessing on an absent line or non-UTF-8 input.

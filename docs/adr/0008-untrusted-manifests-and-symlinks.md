@@ -115,6 +115,7 @@ end-to-end:
 `init_refuses_to_write_through_a_symlinked_skill_directory`,
 `init_refuses_a_manifest_that_is_a_dangling_symlink`,
 `uninstall_removes_nothing_when_a_recorded_path_crosses_a_symlink`,
+`uninstall_refuses_a_manifest_that_is_a_symlink`,
 `a_symlinked_skills_root_is_still_allowed`,
 `writing_the_manifest_leaves_no_temporary_file_and_clears_a_stale_one`, and
 `a_symlink_planted_at_the_temporary_name_is_not_written_through`.

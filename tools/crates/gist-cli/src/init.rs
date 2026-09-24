@@ -862,6 +862,31 @@ mod tests {
     }
 
     #[test]
+    fn rewrite_skill_name_replaces_only_the_frontmatter_name_line() {
+        let src = b"---\nname: tdd\ndescription: x\n---\nsay name: tdd\n";
+        let out = rewrite_skill_name(src, "tdd", "matt-tdd").expect("rewrites");
+        assert_eq!(
+            out,
+            b"---\nname: matt-tdd\ndescription: x\n---\nsay name: tdd\n"
+        );
+    }
+
+    #[test]
+    fn rewrite_skill_name_keeps_a_missing_trailing_newline_missing() {
+        let out = rewrite_skill_name(b"name: tdd", "tdd", "matt-tdd").expect("rewrites");
+        assert_eq!(out, b"name: matt-tdd");
+    }
+
+    #[test]
+    fn rewrite_skill_name_errors_instead_of_guessing() {
+        let missing = rewrite_skill_name(b"---\nname: other\n---\n", "tdd", "matt-tdd");
+        assert!(missing.unwrap_err().contains("name: tdd"));
+
+        let binary = rewrite_skill_name(&[0xff, 0xfe], "tdd", "matt-tdd");
+        assert!(binary.unwrap_err().contains("utf-8"));
+    }
+
+    #[test]
     fn a_missing_target_is_installed() {
         assert_eq!(decide(None, b"new", false), Status::Installed);
     }
