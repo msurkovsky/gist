@@ -29,6 +29,10 @@ Pick up here: read the plan file, confirm still wanted, implement (TDD).
   tree's skills into `.claude/skills/<name>-<skill>/`, prefixed at install
   time so a bare upstream name (`tdd`, `retro`) can't collide. See
   `docs/adr/0005-prefix-experimental-skills-at-install.md`.
+- Done: `gk init --codex` vendors the same skills, byte-identical, into
+  `.agents/skills/` for Codex CLI. Combinable with `--claude` and
+  `--experimental` in one call; at least one of `--claude`/`--codex` is
+  required. See `docs/adr/0006-codex-as-a-second-init-target.md`.
 - First view: `views/claude/workspace.josh` for `~/.claude/skills` on this
   machine, then one per project that should receive the `gist-mr-*` family.
 - Wire `hooks/post-rebase-nag.sh` into `~/.claude/settings.json`.

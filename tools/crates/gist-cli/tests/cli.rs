@@ -468,21 +468,26 @@ fn init_claude_is_idempotent_on_a_second_run() {
 }
 
 #[test]
-fn init_without_claude_is_a_refusal_not_misuse() {
+fn init_without_a_target_is_a_refusal_not_misuse() {
     let repo = Repo::new();
     let (code, _, stderr) = repo.gk(&["init", "--json"]);
 
     assert_eq!(code, 1, "expected refusal, not misuse");
     let value: Value = serde_json::from_str(&stderr).expect("error envelope on stderr");
     assert_eq!(value["status"], "error");
-    assert!(
-        value["message"]
-            .as_str()
-            .expect("message")
-            .contains("--claude"),
-        "got: {}",
-        value["message"]
-    );
+    let message = value["message"].as_str().expect("message");
+    assert!(message.contains("--claude"), "got: {message}");
+    assert!(message.contains("--codex"), "got: {message}");
+}
+
+#[test]
+fn init_experimental_alone_is_still_a_refusal_no_implicit_target() {
+    let repo = Repo::new();
+    let (code, _, stderr) = repo.gk(&["init", "--experimental=mattpocock", "--json"]);
+
+    assert_eq!(code, 1, "expected refusal, not a guess at which target");
+    let value: Value = serde_json::from_str(&stderr).expect("error envelope on stderr");
+    assert_eq!(value["status"], "error");
 }
 
 #[test]
@@ -585,11 +590,11 @@ fn experimental_skill_file_count(package: &str) -> u64 {
 #[test]
 fn init_experimental_installs_a_vendored_package_prefixed() {
     let repo = Repo::new();
-    let data = repo.data(&["init", "--experimental=mattpocock"]);
+    let data = repo.data(&["init", "--claude", "--experimental=mattpocock"]);
 
     assert_eq!(
         data["totals"]["installed"],
-        experimental_skill_file_count("mattpocock")
+        embedded_skill_file_count() + experimental_skill_file_count("mattpocock")
     );
     assert_eq!(data["totals"]["conflicts"], 0);
 
@@ -609,13 +614,13 @@ fn init_experimental_installs_a_vendored_package_prefixed() {
 #[test]
 fn init_experimental_is_idempotent_on_a_second_run() {
     let repo = Repo::new();
-    repo.data(&["init", "--experimental=mattpocock"]);
-    let data = repo.data(&["init", "--experimental=mattpocock"]);
+    repo.data(&["init", "--claude", "--experimental=mattpocock"]);
+    let data = repo.data(&["init", "--claude", "--experimental=mattpocock"]);
 
     assert_eq!(data["totals"]["installed"], 0);
     assert_eq!(
         data["totals"]["unchanged"],
-        experimental_skill_file_count("mattpocock")
+        embedded_skill_file_count() + experimental_skill_file_count("mattpocock")
     );
     assert_eq!(data["totals"]["conflicts"], 0);
 }
@@ -623,7 +628,7 @@ fn init_experimental_is_idempotent_on_a_second_run() {
 #[test]
 fn init_experimental_unknown_package_names_what_is_available() {
     let repo = Repo::new();
-    let (code, _, stderr) = repo.gk(&["init", "--experimental=nope", "--json"]);
+    let (code, _, stderr) = repo.gk(&["init", "--claude", "--experimental=nope", "--json"]);
 
     assert_eq!(code, 1, "expected refusal, not misuse");
     let value: Value = serde_json::from_str(&stderr).expect("error envelope on stderr");
@@ -651,6 +656,72 @@ fn init_claude_and_experimental_together_install_both() {
         .path()
         .join(".claude/skills/mattpocock-tdd/SKILL.md")
         .exists());
+}
+
+#[test]
+fn init_codex_installs_into_dot_agents_skills() {
+    let repo = Repo::new();
+    let data = repo.data(&["init", "--codex"]);
+
+    assert_eq!(data["totals"]["installed"], embedded_skill_file_count());
+    assert_eq!(data["totals"]["conflicts"], 0);
+
+    let outline = repo.path().join(".agents/skills/gist-outline/SKILL.md");
+    assert!(outline.exists());
+    assert!(std::fs::read_to_string(&outline)
+        .expect("read")
+        .contains("name: gist-outline"));
+
+    // Codex is a separate target, not a rename of the Claude one.
+    assert!(!repo.path().join(".claude/skills").exists());
+}
+
+#[test]
+fn init_claude_and_codex_together_install_identical_content_into_both() {
+    let repo = Repo::new();
+    let data = repo.data(&["init", "--claude", "--codex"]);
+
+    assert_eq!(data["totals"]["installed"], 2 * embedded_skill_file_count());
+    assert_eq!(data["totals"]["conflicts"], 0);
+
+    let claude = repo.path().join(".claude/skills/gist-outline/SKILL.md");
+    let codex = repo.path().join(".agents/skills/gist-outline/SKILL.md");
+    assert!(claude.exists());
+    assert!(codex.exists());
+    assert_eq!(
+        std::fs::read(&claude).expect("read"),
+        std::fs::read(&codex).expect("read"),
+        "same skill, byte-identical regardless of target"
+    );
+}
+
+#[test]
+fn init_codex_experimental_reuses_the_prefix_rewrite() {
+    let repo = Repo::new();
+    let data = repo.data(&["init", "--codex", "--experimental=mattpocock"]);
+
+    assert_eq!(
+        data["totals"]["installed"],
+        embedded_skill_file_count() + experimental_skill_file_count("mattpocock")
+    );
+
+    let skill_md = repo.path().join(".agents/skills/mattpocock-tdd/SKILL.md");
+    assert!(skill_md.exists());
+    assert!(std::fs::read_to_string(&skill_md)
+        .expect("read")
+        .contains("name: mattpocock-tdd"));
+    assert!(!repo.path().join(".agents/skills/tdd").exists());
+}
+
+#[test]
+fn init_codex_is_idempotent_on_a_second_run() {
+    let repo = Repo::new();
+    repo.data(&["init", "--codex"]);
+    let data = repo.data(&["init", "--codex"]);
+
+    assert_eq!(data["totals"]["installed"], 0);
+    assert_eq!(data["totals"]["unchanged"], embedded_skill_file_count());
+    assert_eq!(data["totals"]["conflicts"], 0);
 }
 
 #[test]

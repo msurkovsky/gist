@@ -47,7 +47,7 @@ enum Command {
     /// Measure how much of a change is documentation
     Doc(doc::Args),
 
-    /// Vendor this project's Claude Code skills into ./.claude/skills/
+    /// Vendor this project's skills for Claude Code and/or Codex CLI
     Init(init::Args),
 }
 

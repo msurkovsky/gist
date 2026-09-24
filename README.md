@@ -61,13 +61,18 @@ just install   # put gk on PATH
 gk outline .                       # what shape is this repo
 gk doc                             # how much of my change is documentation
 gk init --claude                   # vendor the skills into ./.claude/skills/ of the repo you are in
-gk init --experimental=mattpocock  # vendor one experimental/ package's skills too
+gk init --codex                    # same skills, byte-identical, into ./.agents/skills/ for Codex CLI
+gk init --claude --codex --experimental=mattpocock  # any combination, one call
 ```
 
 `init` is idempotent and never overwrites a file you edited — it reports a
-conflict instead; `--force` overrides. Skills land under their `gist-` names so
-they cannot shadow one the target repo already has; `--experimental` skills land
-under `<package>-` names for the same reason.
+conflict instead; `--force` overrides. `--claude` and `--codex` are two
+independent targets, combinable in one call; either or both is required, and
+picking neither is a refusal, not a guess (see
+`docs/adr/0006-codex-as-a-second-init-target.md`). Skills land under their
+`gist-` names so they cannot shadow one the target repo already has;
+`--experimental` skills land under `<package>-` names for the same reason,
+regardless of which target(s) they're installed into.
 
 ## Composition
 
