@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # Symlink a skill directory into a harness skill directory for local use.
 #
-#   tools/link.sh <skill-dir> [as-name] [dest-dir]
+#   scripts/link.sh <skill-dir> [as-name] [dest-dir]
 #
 # Examples:
-#   tools/link.sh skills/gist-mr-reply
-#   tools/link.sh experimental/mattpocock/skills/engineering/tdd matt-tdd
-#   tools/link.sh skills/toolchain toolchain ~/projects/frontend/.claude/skills
+#   scripts/link.sh skills/gist-mr-reply
+#   scripts/link.sh experimental/mattpocock/skills/engineering/tdd matt-tdd
+#   scripts/link.sh skills/gist-toolchain gist-toolchain ~/projects/frontend/.claude/skills
 #
 # Default dest is ~/.claude/skills. Views (Josh workspaces) are the preferred way to
 # project skills into projects; this is the quick path for trying one skill on this machine.

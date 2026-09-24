@@ -5,16 +5,16 @@
 # upstream branch. Re-running on a moved upstream yields the same commits for the shared
 # part of history, so repeated updates merge cleanly and never duplicate commits.
 #
-#   tools/vendor.sh add <name> <url> [branch]   register and import
-#   tools/vendor.sh update [name...]            re-import registered vendors (default: all)
-#   tools/vendor.sh list                        show registry with local/upstream state
-#   tools/vendor.sh check                       list commits that touched experimental/ outside imports
+#   scripts/vendor.sh add <name> <url> [branch]   register and import
+#   scripts/vendor.sh update [name...]            re-import registered vendors (default: all)
+#   scripts/vendor.sh list                        show registry with local/upstream state
+#   scripts/vendor.sh check                       list commits that touched experimental/ outside imports
 #
-# Registry: tools/vendors.conf, one "name url branch" per line.
+# Registry: scripts/vendors.conf, one "name url branch" per line.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-CONF="$ROOT/tools/vendors.conf"
+CONF="$ROOT/scripts/vendors.conf"
 cd "$ROOT"
 
 die() { echo "error: $*" >&2; exit 1; }
@@ -56,7 +56,7 @@ cmd_add() {
   touch "$CONF"
   grep -q "^$name " "$CONF" && die "$name already registered"
   echo "$name $url $branch" >> "$CONF"
-  git add "$CONF" && git commit -q -m "Register vendor $name" && echo "== registered $name in tools/vendors.conf"
+  git add "$CONF" && git commit -q -m "Register vendor $name" && echo "== registered $name in scripts/vendors.conf"
   import_one "$name" "$url" "$branch"
 }
 
@@ -84,11 +84,11 @@ cmd_list() {
 }
 
 cmd_check() {
-  # Any commit touching experimental/ that is not an import/update merge is a local edit
-  # of vendored content, which will conflict on the next update. Adopt into skills/ instead.
-  # Upstream commits arrive through the merge's second parent; only first-parent history
-  # holds commits made in this repo, so that is the only place a local edit can hide.
-  git log --first-parent --format='%h %s' -- experimental/ | grep -v -E ' (Import|Update) [a-z0-9._-]+ (at|to) [0-9a-f]{7}$' || echo "clean: no local edits under experimental/"
+  # A non-merge commit touching experimental/ is a local edit of vendored content, which
+  # will conflict on the next update. Adopt into skills/ instead. Upstream commits arrive
+  # through the import merge's second parent and only first-parent history holds commits
+  # made in this repo, so first-parent, non-merge is the only place a local edit can hide.
+  git log --first-parent --no-merges --format='%h %s' -- experimental/ | grep . || echo "clean: no local edits under experimental/"
 }
 
 case "${1:-}" in
