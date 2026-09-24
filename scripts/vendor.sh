@@ -78,7 +78,10 @@ cmd_list() {
   while read -r name url branch; do
     [ -z "$name" ] || [[ "$name" == \#* ]] && continue
     local local_sha
-    local_sha="$(git log -1 --first-parent --format=%b -- "experimental/$name" 2>/dev/null | sed -n 's/^Upstream: .*@//p' | head -1)"
+    # Newest import or update commit for this vendor, found by subject. Path-limited log
+    # hides an import merge that is tree-same to its upstream parent, and first-parent
+    # misses it once another merge sits in front, so neither is used here.
+    local_sha="$(git log -E --grep="^(Import|Update) $name " --format=%b 2>/dev/null | sed -n 's/^Upstream: .*@//p' | head -1)"
     echo "$name  $url  $branch  local:${local_sha:0:7}"
   done < "$CONF"
 }
