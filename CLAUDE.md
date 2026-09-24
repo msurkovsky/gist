@@ -6,6 +6,10 @@ Skills are the product. Tools exist to serve them.
 
 - `skills/<name>/SKILL.md` — one skill per directory, frontmatter has `name` and
   `description`. Put anything long in `references/` so it loads on demand.
+  `name` is prefixed `gist-` (`gist-outline`, not `outline`) — `gk init --claude`
+  vendors these into a flat `.claude/skills/`, where a generic name silently
+  collides with a target repo's own skill of the same name. See
+  `docs/adr/0003-prefix-vendored-skill-names.md`.
 - `tools/` — cargo workspace. `gist-core` holds shared output plumbing,
   `gist-cli` builds the `gk` binary.
 - `docs/tool-contract.md` — read before adding a subcommand.
