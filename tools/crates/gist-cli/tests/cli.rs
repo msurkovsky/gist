@@ -789,6 +789,40 @@ fn uninstall_refuses_a_manifest_that_is_json_but_not_a_manifest() {
     assert!(message.contains("nothing was removed"), "got: {message}");
 }
 
+#[test]
+fn writing_the_manifest_leaves_no_temporary_file_and_clears_a_stale_one() {
+    let repo = Repo::new();
+    repo.write(".claude/skills/.gist-manifest.json.tmp", "left by a crash");
+
+    repo.data(&["init", "--claude"]);
+
+    assert!(!repo
+        .path()
+        .join(".claude/skills/.gist-manifest.json.tmp")
+        .exists());
+    assert!(manifest(&repo, ".claude/skills")["files"].is_array());
+}
+
+#[cfg(unix)]
+#[test]
+fn a_symlink_planted_at_the_temporary_name_is_not_written_through() {
+    let repo = Repo::new();
+    let outside = TempDir::new().expect("temp dir");
+    let target = outside.path().join("important.txt");
+    std::fs::write(&target, "important").expect("write");
+    std::fs::create_dir_all(repo.path().join(".claude/skills")).expect("mkdir");
+    std::os::unix::fs::symlink(
+        &target,
+        repo.path().join(".claude/skills/.gist-manifest.json.tmp"),
+    )
+    .expect("symlink");
+
+    repo.data(&["init", "--claude"]);
+
+    assert_eq!(std::fs::read_to_string(&target).expect("read"), "important");
+    assert!(manifest(&repo, ".claude/skills")["files"].is_array());
+}
+
 #[cfg(unix)]
 #[test]
 fn init_refuses_to_write_through_a_symlinked_skill_directory() {

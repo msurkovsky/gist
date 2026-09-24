@@ -750,7 +750,9 @@ fn read_manifest(path: &Path) -> Result<ManifestRead, String> {
 }
 
 /// Write the manifest for one target root, sorted by path — deterministic
-/// ordering, per `docs/tool-contract.md`.
+/// ordering, per `docs/tool-contract.md`. Written to a temporary file and
+/// renamed, so a crash never leaves a truncated manifest for the next run to
+/// refuse.
 fn write_manifest(root: &Path, mut entries: Vec<ManifestEntry>) -> Result<(), String> {
     entries.sort_by(|a, b| a.path.cmp(&b.path));
     let manifest = Manifest {
@@ -760,7 +762,25 @@ fn write_manifest(root: &Path, mut entries: Vec<ManifestEntry>) -> Result<(), St
     let path = root.join(MANIFEST_FILENAME);
     let json = serde_json::to_string_pretty(&manifest)
         .map_err(|err| format!("could not serialize manifest: {err}"))?;
-    std::fs::write(&path, json).map_err(|err| format!("could not write {}: {err}", path.display()))
+
+    let tmp = root.join(format!("{MANIFEST_FILENAME}.tmp"));
+    // Leftover from a crashed run. `remove_file` drops a symlink itself,
+    // never its target, and `create_new` below refuses to follow one.
+    match std::fs::remove_file(&tmp) {
+        Ok(()) => {}
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+        Err(err) => return Err(format!("could not remove {}: {err}", tmp.display())),
+    }
+    let written = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&tmp)
+        .and_then(|mut file| std::io::Write::write_all(&mut file, json.as_bytes()))
+        .and_then(|()| std::fs::rename(&tmp, &path));
+    if written.is_err() {
+        let _ = std::fs::remove_file(&tmp);
+    }
+    written.map_err(|err| format!("could not write {}: {err}", path.display()))
 }
 
 impl Human for Report {

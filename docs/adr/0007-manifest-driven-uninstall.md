@@ -58,6 +58,11 @@ makes `init` and `--uninstall` refuse: a write or removal through it lands
 wherever the link points. Uninstall checks every recorded path before
 removing any. The root itself may be a symlink.
 
+The manifest is written to `.gist-manifest.json.tmp` and renamed, so a crash
+never leaves a truncated manifest for the next `init` to refuse. The temporary
+file is created exclusively, so a symlink planted at that name is replaced,
+not followed.
+
 Every `path` is checked when the manifest is parsed: relative, plain
 components only, no `..`, no root. A manifest is a file a repo can carry, and
 joining an unchecked path to the root would let `--uninstall` delete anything
@@ -152,5 +157,7 @@ nothing on disk) with no I/O. `tests/cli.rs` end-to-end:
 `uninstall_refuses_a_manifest_that_is_json_but_not_a_manifest`,
 `init_refuses_to_write_through_a_symlinked_skill_directory`,
 `init_refuses_a_manifest_that_is_a_dangling_symlink`,
-`uninstall_removes_nothing_when_a_recorded_path_crosses_a_symlink`, and
-`a_symlinked_skills_root_is_still_allowed`.
+`uninstall_removes_nothing_when_a_recorded_path_crosses_a_symlink`,
+`a_symlinked_skills_root_is_still_allowed`,
+`writing_the_manifest_leaves_no_temporary_file_and_clears_a_stale_one`, and
+`a_symlink_planted_at_the_temporary_name_is_not_written_through`.
