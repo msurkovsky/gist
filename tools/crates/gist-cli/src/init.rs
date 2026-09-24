@@ -296,40 +296,34 @@ pub fn run(args: Args) -> Result<Report, String> {
             }
         };
 
-        let mut placing: Result<(), String> = Ok(());
-        'items: for item in &items {
-            let mut file_reports = Vec::with_capacity(item.files.len());
-            for file in &item.files {
-                let target = root_path.join(&file.path);
-                let status = match place(&target, &file.contents, args.force) {
-                    Ok(status) => status,
-                    Err(err) => {
-                        placing = Err(err);
-                        break 'items;
+        let placing = (|| -> Result<(), String> {
+            for item in &items {
+                let mut file_reports = Vec::with_capacity(item.files.len());
+                for file in &item.files {
+                    let target = root_path.join(&file.path);
+                    let status = place(&target, &file.contents, args.force)?;
+                    totals.record(status);
+                    target_totals.record(status);
+
+                    // A conflict means `place` left the existing file
+                    // untouched, so this run placed nothing there: keep
+                    // whatever an earlier run recorded (nothing, if the file
+                    // was never gk's) rather than recording foreign content,
+                    // or `--uninstall` would delete a file gk doesn't own.
+                    let path = file.path.display().to_string();
+                    if status != Status::Conflict {
+                        manifest_entries.insert(path.clone(), hash(&file.contents));
                     }
-                };
-                totals.record(status);
-                target_totals.record(status);
 
-                // A conflict means `place` left the existing file untouched,
-                // so this run placed nothing there: keep whatever an earlier
-                // run recorded (nothing, if the file was never gk's) rather
-                // than recording foreign content, or `--uninstall` would
-                // delete a file gk doesn't own.
-                if status != Status::Conflict {
-                    manifest_entries.insert(file.path.display().to_string(), hash(&file.contents));
+                    file_reports.push(FileReport { path, status });
                 }
-
-                file_reports.push(FileReport {
-                    path: file.path.display().to_string(),
-                    status,
+                skills.push(SkillReport {
+                    name: item.name.clone(),
+                    files: file_reports,
                 });
             }
-            skills.push(SkillReport {
-                name: item.name.clone(),
-                files: file_reports,
-            });
-        }
+            Ok(())
+        })();
 
         // Written even when placing failed partway: the files already on
         // disk are gk's, and an untracked file is one `--uninstall` can
