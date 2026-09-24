@@ -44,7 +44,7 @@ import_one() {
     msg="Import $name at ${up:0:7}"
     extra+=(--allow-unrelated-histories)
   fi
-  git merge --no-ff "${extra[@]}" -m "$msg" -m "Upstream: $url@$up" -m "Filter: :prefix=$prefix" FILTERED_HEAD
+  git merge -q --no-ff "${extra[@]}" -m "$msg" -m "Upstream: $url@$up" -m "Filter: :prefix=$prefix" FILTERED_HEAD
   echo "   merged $(git rev-list --count HEAD^..HEAD^2 2>/dev/null || echo '?') commits"
 }
 
@@ -78,7 +78,7 @@ cmd_list() {
   while read -r name url branch; do
     [ -z "$name" ] || [[ "$name" == \#* ]] && continue
     local local_sha
-    local_sha="$(git log -1 --format=%b -- "experimental/$name" 2>/dev/null | sed -n 's/^Upstream: .*@//p' | head -1)"
+    local_sha="$(git log -1 --first-parent --format=%b -- "experimental/$name" 2>/dev/null | sed -n 's/^Upstream: .*@//p' | head -1)"
     echo "$name  $url  $branch  local:${local_sha:0:7}"
   done < "$CONF"
 }
@@ -86,7 +86,9 @@ cmd_list() {
 cmd_check() {
   # Any commit touching experimental/ that is not an import/update merge is a local edit
   # of vendored content, which will conflict on the next update. Adopt into skills/ instead.
-  git log --format='%h %s' -- experimental/ | grep -v -E ' (Import|Update) [a-z0-9._-]+ (at|to) [0-9a-f]{7}$' || echo "clean: no local edits under experimental/"
+  # Upstream commits arrive through the merge's second parent; only first-parent history
+  # holds commits made in this repo, so that is the only place a local edit can hide.
+  git log --first-parent --format='%h %s' -- experimental/ | grep -v -E ' (Import|Update) [a-z0-9._-]+ (at|to) [0-9a-f]{7}$' || echo "clean: no local edits under experimental/"
 }
 
 case "${1:-}" in
