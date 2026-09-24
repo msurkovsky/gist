@@ -71,7 +71,6 @@ impl Repo {
         )
     }
 
-    /// Run `gk <args> --json` and return (exit code, stdout, stderr).
     fn gk_json(&self, args: &[&str]) -> (i32, String, String) {
         let mut with_json = args.to_vec();
         with_json.push("--json");

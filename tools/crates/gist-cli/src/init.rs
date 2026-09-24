@@ -16,9 +16,8 @@
 //! `<root>/.gist-manifest.json`, path + sha256 per file it placed — so
 //! `--uninstall` can remove exactly what a prior `init` put there, whether or
 //! not the binary running `--uninstall` still embeds the same skills. See
-//! docs/adr/0007-manifest-driven-uninstall.md. A repo can carry the manifest
-//! and any symlink under a target, so both are untrusted input; see
-//! docs/adr/0008-untrusted-manifests-and-symlinks.md.
+//! docs/adr/0007-manifest-driven-uninstall.md. The manifest and symlinks under
+//! a target are untrusted input: docs/adr/0008-untrusted-manifests-and-symlinks.md.
 
 use clap::Args as ClapArgs;
 use gist_core::Human;
@@ -205,7 +204,6 @@ impl Report {
     }
 }
 
-/// One file a skill places, path relative to a target root.
 struct PlacedFile {
     path: PathBuf,
     contents: Cow<'static, [u8]>,
@@ -218,9 +216,8 @@ struct SkillItem {
     files: Vec<PlacedFile>,
 }
 
-/// A path under a target root: relative and made of plain components only,
-/// so joining it to the root can never leave the root. A manifest is data a
-/// repo can carry, so its paths are checked when parsed, not trusted.
+/// A path under a target root: relative, plain components only, so joining it
+/// to the root can never leave it. Checked when a manifest is parsed.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(try_from = "String")]
 struct ManifestPath(String);
@@ -345,15 +342,12 @@ pub fn run(args: Args) -> Result<Report, String> {
                     totals.record(status);
                     target_totals.record(status);
 
-                    // A conflict means `place` left the existing file
-                    // untouched, so this run placed nothing there: keep
-                    // whatever an earlier run recorded (nothing, if the file
-                    // was never gk's) rather than recording foreign content,
-                    // or `--uninstall` would delete a file gk doesn't own.
+                    // A conflict left the file untouched, so nothing was placed.
+                    // Keep any earlier record; recording foreign content would
+                    // let `--uninstall` delete it.
                     let path = file.path.display().to_string();
                     if status != Status::Conflict {
-                        // Embedded paths are plain by construction; only a
-                        // parsed manifest needs the check.
+                        // Embedded paths are plain by construction.
                         manifest_entries.insert(ManifestPath(path.clone()), hash(&file.contents));
                     }
 
@@ -400,10 +394,8 @@ fn run_uninstall(roots: &[&str], force: bool) -> Result<UninstallReport, String>
         let manifest_path = root_path.join(MANIFEST_FILENAME);
         refuse_symlink(root_path, Path::new(MANIFEST_FILENAME))?;
 
-        // A missing or corrupt manifest means nothing to do, not an error —
-        // running `--uninstall` twice (or on a target `init` never touched)
-        // is not a failure, matching install's own idempotency. One that
-        // parses but is invalid is an error: silence would read as success.
+        // Missing or corrupt means nothing to do, so a second `--uninstall` is
+        // not a failure. Parsed but invalid is an error: silence reads as success.
         let manifest = match read_manifest(&manifest_path)? {
             ManifestRead::Found(manifest) => manifest,
             ManifestRead::Rejected(reason) => {
@@ -574,7 +566,6 @@ fn collect_items(experimental: &[String]) -> Result<Vec<SkillItem>, String> {
     Ok(items)
 }
 
-/// A skill directory's name, taken from its own path.
 fn skill_name_of<'a>(dir: &'a Dir<'a>) -> Result<&'a str, String> {
     dir.path()
         .file_name()
@@ -582,7 +573,6 @@ fn skill_name_of<'a>(dir: &'a Dir<'a>) -> Result<&'a str, String> {
         .ok_or_else(|| format!("not a valid skill name: {}", dir.path().display()))
 }
 
-/// Every file under a skill directory, sorted for deterministic output.
 fn sorted_files<'a>(dir: &'a Dir<'a>) -> Vec<&'a File<'a>> {
     let mut files = Vec::new();
     collect_files(dir, &mut files);
@@ -696,10 +686,8 @@ fn place(target: &Path, contents: &[u8], force: bool) -> Result<Status, String> 
     Ok(status)
 }
 
-/// Refuse a path with a symlink anywhere under `root`, the file itself
-/// included: a read, write, or removal through it would land wherever the
-/// link points, outside the root. The root itself may be a symlink, since
-/// people link `~/.claude/skills` into a dotfiles repo.
+/// Refuse a symlink anywhere under `root`, the file included, since access
+/// through it lands outside. The root itself may be one: people link it into dotfiles.
 fn refuse_symlink(root: &Path, rel: &Path) -> Result<(), String> {
     let mut current = root.to_path_buf();
     for component in rel.components() {
@@ -724,7 +712,6 @@ fn hash(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
 
-/// What sits at a target root's manifest path.
 enum ManifestRead {
     Absent,
     /// Not JSON at all, such as a truncated write.
