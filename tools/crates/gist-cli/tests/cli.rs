@@ -559,6 +559,34 @@ fn init_claude_human_output_lists_each_skill_and_file() {
     assert!(!stdout.starts_with('{'));
 }
 
+/// One skill name under `experimental/<package>/skills/`, so a test does not
+/// hard-code an upstream name that `just vendor update` may rename.
+fn an_experimental_skill(package: &str) -> String {
+    fn find(dir: &Path) -> Option<String> {
+        let mut paths: Vec<_> = std::fs::read_dir(dir)
+            .expect("read dir")
+            .map(|entry| entry.expect("dir entry").path())
+            .collect();
+        paths.sort();
+        for path in paths.into_iter().filter(|path| path.is_dir()) {
+            if path.join("SKILL.md").is_file() {
+                return path
+                    .file_name()
+                    .map(|name| name.to_string_lossy().into_owned());
+            }
+            if let Some(found) = find(&path) {
+                return Some(found);
+            }
+        }
+        None
+    }
+    let skills = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../../experimental")
+        .join(package)
+        .join("skills");
+    find(&skills).expect("package vendors at least one skill")
+}
+
 /// Number of files under every skill directory (one containing `SKILL.md`
 /// directly) inside `experimental/<package>/skills/`, recursively — mirrors
 /// what `init --experimental` itself walks, ignoring stray files like a
@@ -1012,7 +1040,7 @@ fn init_claude_uninstall_does_not_delete_a_file_that_conflicted_at_install_time(
 }
 
 #[test]
-fn a_conflict_on_rerun_keeps_the_hash_the_first_run_recorded() {
+fn a_conflict_on_rerun_still_protects_the_edited_file_on_uninstall() {
     let repo = Repo::new();
     repo.data(&["init", "--claude"]);
     repo.write(".claude/skills/gist-outline/SKILL.md", "locally modified\n");
@@ -1033,15 +1061,18 @@ fn a_conflict_on_rerun_keeps_the_hash_the_first_run_recorded() {
 #[test]
 fn rerunning_without_experimental_keeps_earlier_experimental_files_tracked() {
     let repo = Repo::new();
+    let skill = format!("mattpocock-{}", an_experimental_skill("mattpocock"));
     repo.data(&["init", "--claude", "--experimental=mattpocock"]);
     repo.data(&["init", "--claude"]);
 
     let manifest = manifest(&repo, ".claude/skills");
     let files = manifest["files"].as_array().expect("files array");
-    assert!(files.iter().any(|f| f["path"] == "mattpocock-tdd/SKILL.md"));
+    assert!(files
+        .iter()
+        .any(|f| f["path"] == format!("{skill}/SKILL.md")));
 
     repo.data(&["init", "--claude", "--uninstall"]);
-    assert!(!repo.path().join(".claude/skills/mattpocock-tdd").exists());
+    assert!(!repo.path().join(".claude/skills").join(&skill).exists());
 }
 
 #[test]

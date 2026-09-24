@@ -134,7 +134,7 @@ nothing on disk) with no I/O. `tests/cli.rs` end-to-end:
 `init_uninstall_with_experimental_is_a_refusal`,
 `init_claude_uninstall_does_not_touch_a_codex_target_left_unselected`,
 `init_claude_uninstall_does_not_delete_a_file_that_conflicted_at_install_time`,
-`a_conflict_on_rerun_keeps_the_hash_the_first_run_recorded`,
+`a_conflict_on_rerun_still_protects_the_edited_file_on_uninstall`,
 `rerunning_without_experimental_keeps_earlier_experimental_files_tracked`,
 `init_refuses_to_overwrite_a_corrupt_manifest`,
 `init_claude_uninstall_with_a_corrupt_manifest_is_a_zero_op`,

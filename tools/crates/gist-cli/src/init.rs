@@ -364,11 +364,7 @@ pub fn run(args: Args) -> Result<Report, String> {
         // Written even when placing failed partway: the files already on
         // disk are gk's, and an untracked file is one `--uninstall` can
         // never remove. The placing error is the one worth reporting.
-        let entries = manifest_entries
-            .into_iter()
-            .map(|(path, sha256)| ManifestEntry { path, sha256 })
-            .collect();
-        let written = write_manifest(root_path, entries);
+        let written = write_manifest(root_path, manifest_entries);
         placing?;
         written?;
 
@@ -424,7 +420,7 @@ fn run_uninstall(roots: &[&str], force: bool) -> Result<UninstallReport, String>
 
         let mut target_totals = UninstallTotals::default();
         let mut file_reports = Vec::with_capacity(entries.len());
-        let mut kept_entries = Vec::new();
+        let mut kept_entries: BTreeMap<ManifestPath, String> = BTreeMap::new();
         let mut dirs: BTreeSet<PathBuf> = BTreeSet::new();
 
         for entry in entries {
@@ -457,7 +453,7 @@ fn run_uninstall(roots: &[&str], force: bool) -> Result<UninstallReport, String>
                 status,
             });
             if status == UninstallStatus::Kept {
-                kept_entries.push(entry);
+                kept_entries.insert(entry.path, entry.sha256);
             }
         }
 
@@ -745,15 +741,17 @@ fn read_manifest(path: &Path) -> Result<ManifestRead, String> {
     }
 }
 
-/// Write the manifest for one target root, sorted by path — deterministic
-/// ordering, per `docs/tool-contract.md`. Written to a temporary file and
-/// renamed, so a crash never leaves a truncated manifest for the next run to
-/// refuse.
-fn write_manifest(root: &Path, mut entries: Vec<ManifestEntry>) -> Result<(), String> {
-    entries.sort_by(|a, b| a.path.cmp(&b.path));
+/// Write the manifest for one target root, sorted by path because `entries`
+/// is — deterministic ordering, per `docs/tool-contract.md`. Written to a
+/// temporary file and renamed, so a crash never leaves a truncated manifest
+/// for the next run to refuse.
+fn write_manifest(root: &Path, entries: BTreeMap<ManifestPath, String>) -> Result<(), String> {
     let manifest = Manifest {
         gk_version: env!("CARGO_PKG_VERSION").to_string(),
-        files: entries,
+        files: entries
+            .into_iter()
+            .map(|(path, sha256)| ManifestEntry { path, sha256 })
+            .collect(),
     };
     let path = root.join(MANIFEST_FILENAME);
     let json = serde_json::to_string_pretty(&manifest)
