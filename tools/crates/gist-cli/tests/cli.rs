@@ -754,8 +754,10 @@ fn uninstall_never_removes_a_file_outside_the_root_named_by_dotdot() {
     repo.write("victim.txt", "precious");
     plant_manifest(&repo, "../../victim.txt", &sha256_hex(b"precious"));
 
-    repo.data(&["init", "--claude", "--uninstall"]);
+    let (code, message) = repo.error(&["init", "--claude", "--uninstall"]);
 
+    assert_eq!(code, 1);
+    assert!(message.contains("plain relative path"), "got: {message}");
     assert!(repo.path().join("victim.txt").exists());
 }
 
@@ -767,9 +769,24 @@ fn uninstall_never_removes_an_absolute_path_even_with_force() {
     std::fs::write(&victim, "precious").expect("write");
     plant_manifest(&repo, victim.to_str().expect("utf8"), "not-the-hash");
 
-    repo.data(&["init", "--claude", "--uninstall", "--force"]);
+    let (code, _) = repo.error(&["init", "--claude", "--uninstall", "--force"]);
 
+    assert_eq!(code, 1);
     assert!(victim.exists());
+}
+
+#[test]
+fn uninstall_refuses_a_manifest_that_is_json_but_not_a_manifest() {
+    let repo = Repo::new();
+    repo.write(
+        ".claude/skills/.gist-manifest.json",
+        r#"{"gk_version":"x"}"#,
+    );
+
+    let (code, message) = repo.error(&["init", "--claude", "--uninstall"]);
+
+    assert_eq!(code, 1);
+    assert!(message.contains("nothing was removed"), "got: {message}");
 }
 
 #[test]

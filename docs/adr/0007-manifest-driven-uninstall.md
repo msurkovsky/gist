@@ -46,12 +46,17 @@ Every `init` run that touches a target root — `.claude/skills` or
 `.agents/skills` — writes `<root>/.gist-manifest.json` at the end of the run:
 `{gk_version, files: [{path, sha256}, ...]}`, sorted by `path`, recording only
 what gk placed. `gk_version` is for debugging and, later, for telling a user
-their installed skills predate the running `gk`; nothing reads it yet. Each run merges into the previous manifest: a file placed or
-found identical gets the hash of the embedded content, a file left alone as a
-conflict keeps whatever an earlier run recorded (nothing, if it was never
-gk's), and files outside this run's selection stay recorded. Recording a
-conflicted file's on-disk hash would let `--uninstall` delete a file gk never
-wrote. Dot-prefixed so it reads as tool metadata, not a skill
+their installed skills predate the running `gk`; nothing reads it yet. Each
+run merges into the previous manifest: a file placed or found identical gets
+the hash of the embedded content, a file left alone as a conflict keeps
+whatever an earlier run recorded (nothing, if it was never gk's), and files
+outside this run's selection stay recorded. Recording a conflicted file's
+on-disk hash would let `--uninstall` delete a file gk never wrote.
+
+Every `path` is checked when the manifest is parsed: relative, plain
+components only, no `..`, no root. A manifest is a file a repo can carry, and
+joining an unchecked path to the root would let `--uninstall` delete anything
+the user can reach. Dot-prefixed so it reads as tool metadata, not a skill
 directory — Claude Code's discovery only looks for `<dir>/SKILL.md` and never
 trips on it.
 
@@ -106,7 +111,11 @@ the manifest itself is deleted or corrupted, which falls back to the
 zero-op-not-an-error path (same as a target `init` never touched), not a
 crash. An install run does not take that fallback for a corrupt manifest: it
 refuses, because rebuilding over the file would silently drop tracking of
-every file outside the run's selection. Deleting the file acknowledges that. `Report` becomes an enum over an install-direction and an
+every file outside the run's selection. Deleting the file acknowledges that.
+A manifest that is valid JSON but not a valid manifest (a path leaving the
+root, a missing field) is different again: someone wrote it on purpose, or a
+newer `gk` did, so silence would read as success. `--uninstall` exits 1
+naming the reason and removes nothing. `Report` becomes an enum over an install-direction and an
 uninstall-direction report, since the two produce genuinely different
 per-file status vocabularies (`installed`/`unchanged`/`overwritten`/
 `conflict` vs. `removed`/`kept`/`missing`); `Report::has_conflicts` is
@@ -130,5 +139,9 @@ nothing on disk) with no I/O. `tests/cli.rs` end-to-end:
 `a_conflict_on_rerun_keeps_the_hash_the_first_run_recorded`,
 `rerunning_without_experimental_keeps_earlier_experimental_files_tracked`,
 `init_refuses_to_overwrite_a_corrupt_manifest`,
-`init_claude_uninstall_with_a_corrupt_manifest_is_a_zero_op`, and
-`an_io_failure_partway_still_records_the_files_already_placed`.
+`init_claude_uninstall_with_a_corrupt_manifest_is_a_zero_op`,
+`an_io_failure_partway_still_records_the_files_already_placed`,
+`uninstall_never_removes_a_file_outside_the_root_named_by_dotdot`,
+`uninstall_never_removes_an_absolute_path_even_with_force`,
+`init_refuses_a_manifest_whose_paths_leave_the_root`, and
+`uninstall_refuses_a_manifest_that_is_json_but_not_a_manifest`.

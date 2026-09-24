@@ -322,7 +322,7 @@ pub fn run(args: Args) -> Result<Report, String> {
                     .collect(),
                 // Rebuilding over it would drop tracking of every file outside
                 // this run's selection without a word.
-                ManifestRead::Corrupt(reason) => {
+                ManifestRead::Corrupt(reason) | ManifestRead::Rejected(reason) => {
                     return Err(format!(
                         "{} is not a valid manifest ({reason}) — delete it to start \
                      tracking afresh; files an earlier run placed will no longer \
@@ -396,9 +396,16 @@ fn run_uninstall(roots: &[&str], force: bool) -> Result<UninstallReport, String>
 
         // A missing or corrupt manifest means nothing to do, not an error —
         // running `--uninstall` twice (or on a target `init` never touched)
-        // is not a failure, matching install's own idempotency.
+        // is not a failure, matching install's own idempotency. One that
+        // parses but is invalid is an error: silence would read as success.
         let manifest = match read_manifest(&manifest_path)? {
             ManifestRead::Found(manifest) => manifest,
+            ManifestRead::Rejected(reason) => {
+                return Err(format!(
+                    "{} is not a valid manifest ({reason}) — nothing was removed",
+                    manifest_path.display()
+                ))
+            }
             ManifestRead::Absent | ManifestRead::Corrupt(_) => {
                 targets.push(UninstallTargetReport {
                     target: root.to_string(),
@@ -685,16 +692,24 @@ fn hash(bytes: &[u8]) -> String {
 /// What sits at a target root's manifest path.
 enum ManifestRead {
     Absent,
+    /// Not JSON at all, such as a truncated write.
     Corrupt(String),
+    /// JSON, but not a valid manifest: a path leaving the root, a missing
+    /// field. Someone wrote it on purpose, or a newer gk did.
+    Rejected(String),
     Found(Manifest),
 }
 
 /// Read the manifest at `path`. Only an I/O failure is an `Err`; a file that
-/// does not parse is `Corrupt`, so each caller decides what that means.
+/// does not parse is `Corrupt` or `Rejected`, so each caller decides what
+/// that means.
 fn read_manifest(path: &Path) -> Result<ManifestRead, String> {
     match std::fs::read(path) {
         Ok(bytes) => Ok(match serde_json::from_slice(&bytes) {
             Ok(manifest) => ManifestRead::Found(manifest),
+            Err(err) if err.classify() == serde_json::error::Category::Data => {
+                ManifestRead::Rejected(err.to_string())
+            }
             Err(err) => ManifestRead::Corrupt(err.to_string()),
         }),
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(ManifestRead::Absent),
