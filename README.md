@@ -83,7 +83,8 @@ whichever skills the running binary currently embeds (see
 `docs/adr/0007-manifest-driven-uninstall.md`). `init` and `--uninstall` refuse
 to read or write through a symlink under the target, such as one
 `scripts/link.sh` made; remove the link first. The target directory itself may
-be a symlink.
+be a symlink. A manifest is treated as untrusted input, since a repo can carry
+one (see `docs/adr/0008-untrusted-manifests-and-symlinks.md`).
 
 ## Composition
 

@@ -16,7 +16,9 @@
 //! `<root>/.gist-manifest.json`, path + sha256 per file it placed — so
 //! `--uninstall` can remove exactly what a prior `init` put there, whether or
 //! not the binary running `--uninstall` still embeds the same skills. See
-//! docs/adr/0007-manifest-driven-uninstall.md.
+//! docs/adr/0007-manifest-driven-uninstall.md. A repo can carry the manifest
+//! and any symlink under a target, so both are untrusted input; see
+//! docs/adr/0008-untrusted-manifests-and-symlinks.md.
 
 use clap::Args as ClapArgs;
 use gist_core::Human;
