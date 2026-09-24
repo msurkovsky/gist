@@ -47,7 +47,8 @@ enum Command {
     /// Measure how much of a change is documentation
     Doc(doc::Args),
 
-    /// Vendor this project's skills for Claude Code and/or Codex CLI
+    /// Vendor this project's skills for Claude Code and/or Codex CLI, or
+    /// remove them with --uninstall
     Init(init::Args),
 }
 
@@ -61,11 +62,12 @@ fn main() -> ExitCode {
         Command::Doc(args) => doc::run(args)
             .map(|report| emit(report, cli.json))
             .map_err(|message| fail(message, exit::FAILURE, cli.json)),
-        // A conflict is a successful measurement, not a run failure — `emit`
-        // always signals success, so exit code comes from the report itself.
+        // A conflict, or a kept file on uninstall, is a successful
+        // measurement, not a run failure — `emit` always signals success, so
+        // exit code comes from the report itself.
         Command::Init(args) => init::run(args)
             .map(|report| {
-                let code = if report.has_conflicts() {
+                let code = if report.is_failure() {
                     exit::FAILURE
                 } else {
                     exit::OK

@@ -724,6 +724,175 @@ fn init_codex_is_idempotent_on_a_second_run() {
     assert_eq!(data["totals"]["conflicts"], 0);
 }
 
+fn manifest(repo: &Repo, root: &str) -> Value {
+    let text = std::fs::read_to_string(repo.path().join(root).join(".gist-manifest.json"))
+        .expect("read manifest");
+    serde_json::from_str(&text).expect("manifest is json")
+}
+
+#[test]
+fn init_claude_writes_a_manifest_after_install() {
+    let repo = Repo::new();
+    repo.data(&["init", "--claude"]);
+
+    let manifest = manifest(&repo, ".claude/skills");
+    let files = manifest["files"].as_array().expect("files array");
+    assert_eq!(files.len() as u64, embedded_skill_file_count());
+
+    let paths: Vec<&str> = files.iter().map(|f| f["path"].as_str().unwrap()).collect();
+    let mut sorted = paths.clone();
+    sorted.sort();
+    assert_eq!(paths, sorted, "manifest entries are sorted by path");
+    assert!(paths.contains(&"gist-outline/SKILL.md"));
+
+    for file in files {
+        let sha256 = file["sha256"].as_str().expect("sha256");
+        assert_eq!(sha256.len(), 64, "sha256 is 64 hex chars, got {sha256}");
+    }
+}
+
+#[test]
+fn init_claude_uninstall_removes_untouched_files() {
+    let repo = Repo::new();
+    repo.data(&["init", "--claude"]);
+
+    let data = repo.data(&["init", "--claude", "--uninstall"]);
+    assert_eq!(data["totals"]["removed"], embedded_skill_file_count());
+    assert_eq!(data["totals"]["kept"], 0);
+    assert_eq!(data["totals"]["missing"], 0);
+
+    assert!(!repo.path().join(".claude/skills/gist-outline").exists());
+    assert!(!repo.path().join(".claude/skills/gist-doc-review").exists());
+    assert!(!repo
+        .path()
+        .join(".claude/skills/.gist-manifest.json")
+        .exists());
+}
+
+#[test]
+fn init_claude_uninstall_keeps_locally_modified_files_and_reports_them() {
+    let repo = Repo::new();
+    repo.data(&["init", "--claude"]);
+    repo.write(".claude/skills/gist-outline/SKILL.md", "locally modified\n");
+
+    let (code, stdout, _) = repo.gk(&["init", "--claude", "--uninstall", "--json"]);
+    assert_eq!(code, 1);
+    let value: Value = serde_json::from_str(&stdout).expect("stdout is json");
+    assert_eq!(value["data"]["totals"]["kept"], 1);
+    assert_eq!(
+        value["data"]["totals"]["removed"],
+        embedded_skill_file_count() - 1
+    );
+
+    let contents =
+        std::fs::read_to_string(repo.path().join(".claude/skills/gist-outline/SKILL.md"))
+            .expect("read");
+    assert_eq!(contents, "locally modified\n");
+
+    // The rest, including the now-empty gist-doc-review tree, is gone.
+    assert!(!repo.path().join(".claude/skills/gist-doc-review").exists());
+
+    let manifest = manifest(&repo, ".claude/skills");
+    let files = manifest["files"].as_array().expect("files array");
+    assert_eq!(files.len(), 1);
+    assert_eq!(files[0]["path"], "gist-outline/SKILL.md");
+}
+
+#[test]
+fn init_claude_uninstall_force_removes_everything() {
+    let repo = Repo::new();
+    repo.data(&["init", "--claude"]);
+    repo.write(".claude/skills/gist-outline/SKILL.md", "locally modified\n");
+
+    let data = repo.data(&["init", "--claude", "--uninstall", "--force"]);
+    assert_eq!(data["totals"]["removed"], embedded_skill_file_count());
+    assert_eq!(data["totals"]["kept"], 0);
+
+    // The manifest-recorded skill trees are gone; the root itself is left
+    // alone (it may hold skills of the user's own).
+    assert!(!repo.path().join(".claude/skills/gist-outline").exists());
+    assert!(!repo.path().join(".claude/skills/gist-doc-review").exists());
+    assert!(!repo
+        .path()
+        .join(".claude/skills/.gist-manifest.json")
+        .exists());
+}
+
+#[test]
+fn init_claude_uninstall_handles_a_file_already_deleted_by_hand() {
+    let repo = Repo::new();
+    repo.data(&["init", "--claude"]);
+    std::fs::remove_file(repo.path().join(".claude/skills/gist-outline/SKILL.md")).expect("remove");
+
+    let data = repo.data(&["init", "--claude", "--uninstall"]);
+    assert_eq!(data["totals"]["missing"], 1);
+    assert_eq!(data["totals"]["removed"], embedded_skill_file_count() - 1);
+    assert_eq!(data["totals"]["kept"], 0);
+
+    assert!(!repo.path().join(".claude/skills/gist-outline").exists());
+    assert!(!repo.path().join(".claude/skills/gist-doc-review").exists());
+    assert!(!repo
+        .path()
+        .join(".claude/skills/.gist-manifest.json")
+        .exists());
+}
+
+#[test]
+fn init_claude_uninstall_with_no_prior_install_is_a_zero_op_not_an_error() {
+    let repo = Repo::new();
+    let data = repo.data(&["init", "--claude", "--uninstall"]);
+
+    assert_eq!(data["totals"]["removed"], 0);
+    assert_eq!(data["totals"]["kept"], 0);
+    assert_eq!(data["totals"]["missing"], 0);
+}
+
+#[test]
+fn init_claude_uninstall_human_output_lists_kept_files_and_the_force_hint() {
+    let repo = Repo::new();
+    repo.data(&["init", "--claude"]);
+    repo.write(".claude/skills/gist-outline/SKILL.md", "locally modified\n");
+
+    let (code, stdout, _) = repo.gk(&["init", "--claude", "--uninstall"]);
+    assert_eq!(code, 1);
+    assert!(stdout.contains("gist-outline/SKILL.md"), "got: {stdout}");
+    assert!(stdout.contains("--force"), "got: {stdout}");
+    assert!(!stdout.starts_with('{'));
+}
+
+#[test]
+fn init_uninstall_with_experimental_is_a_refusal() {
+    let repo = Repo::new();
+    repo.data(&["init", "--claude", "--experimental=mattpocock"]);
+
+    let (code, _, stderr) = repo.gk(&[
+        "init",
+        "--claude",
+        "--uninstall",
+        "--experimental=mattpocock",
+        "--json",
+    ]);
+    assert_eq!(code, 1, "expected refusal, not misuse");
+    let value: Value = serde_json::from_str(&stderr).expect("error envelope on stderr");
+    assert_eq!(value["status"], "error");
+    let message = value["message"].as_str().expect("message");
+    assert!(message.contains("--experimental"), "got: {message}");
+}
+
+#[test]
+fn init_claude_uninstall_does_not_touch_a_codex_target_left_unselected() {
+    let repo = Repo::new();
+    repo.data(&["init", "--claude", "--codex"]);
+
+    repo.data(&["init", "--claude", "--uninstall"]);
+
+    assert!(!repo.path().join(".claude/skills/gist-outline").exists());
+    assert!(repo
+        .path()
+        .join(".agents/skills/gist-outline/SKILL.md")
+        .exists());
+}
+
 #[test]
 fn a_renamed_file_counts_only_what_changed_in_it() {
     let repo = Repo::new();

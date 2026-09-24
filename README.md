@@ -63,6 +63,7 @@ gk doc                             # how much of my change is documentation
 gk init --claude                   # vendor the skills into ./.claude/skills/ of the repo you are in
 gk init --codex                    # same skills, byte-identical, into ./.agents/skills/ for Codex CLI
 gk init --claude --codex --experimental=mattpocock  # any combination, one call
+gk init --claude --uninstall       # remove what a prior init --claude put there
 ```
 
 `init` is idempotent and never overwrites a file you edited — it reports a
@@ -73,6 +74,13 @@ picking neither is a refusal, not a guess (see
 `gist-` names so they cannot shadow one the target repo already has;
 `--experimental` skills land under `<package>-` names for the same reason,
 regardless of which target(s) they're installed into.
+
+Every `init` run writes a manifest (`<target>/.gist-manifest.json`) recording
+exactly what it placed. `--uninstall` reads that manifest and removes what it
+recorded — files edited since install are left in place and reported, again
+overridable with `--force` — instead of re-deriving a removal list from
+whichever skills the running binary currently embeds (see
+`docs/adr/0007-manifest-driven-uninstall.md`).
 
 ## Composition
 

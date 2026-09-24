@@ -11,12 +11,20 @@
 //! `gk` ships as a single binary with no source tree alongside it, so the
 //! skills this repo produces are embedded into the binary at build time —
 //! see docs/adr/0002-embed-skills-for-init.md.
+//!
+//! Every run of `init --claude` and/or `--codex` writes a manifest —
+//! `<root>/.gist-manifest.json`, path + sha256 per file it placed — so
+//! `--uninstall` can remove exactly what a prior `init` put there, whether or
+//! not the binary running `--uninstall` still embeds the same skills. See
+//! docs/adr/0007-manifest-driven-uninstall.md.
 
 use clap::Args as ClapArgs;
 use gist_core::Human;
 use include_dir::{include_dir, Dir, File};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::borrow::Cow;
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 static SKILLS: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/../../../skills");
@@ -24,6 +32,7 @@ static EXPERIMENTAL: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/../../../experi
 
 const CLAUDE_ROOT: &str = ".claude/skills";
 const CODEX_ROOT: &str = ".agents/skills";
+const MANIFEST_FILENAME: &str = ".gist-manifest.json";
 
 /// Command line for `gk init`.
 #[derive(ClapArgs, Debug)]
@@ -43,6 +52,10 @@ pub struct Args {
     /// Overwrite files with local changes instead of reporting a conflict
     #[arg(long)]
     force: bool,
+
+    /// Remove what a previous init installed, using each target's manifest
+    #[arg(long)]
+    uninstall: bool,
 }
 
 /// What was done to one embedded file.
@@ -106,16 +119,87 @@ struct TargetReport {
     skills: Vec<SkillReport>,
 }
 
-/// Everything `gk init` did, one `TargetReport` per selected target root.
+/// Everything an install run did, one `TargetReport` per selected target root.
 #[derive(Debug, Serialize)]
-pub struct Report {
+pub struct InstallReport {
     totals: Totals,
     targets: Vec<TargetReport>,
 }
 
+/// What was done to one manifest-recorded file during `--uninstall`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum UninstallStatus {
+    Removed,
+    Kept,
+    Missing,
+}
+
+impl UninstallStatus {
+    fn label(self) -> &'static str {
+        match self {
+            UninstallStatus::Removed => "removed",
+            UninstallStatus::Kept => "kept",
+            UninstallStatus::Missing => "missing",
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+struct UninstallFileReport {
+    path: String,
+    status: UninstallStatus,
+}
+
+#[derive(Debug, Default, Serialize)]
+struct UninstallTotals {
+    removed: usize,
+    kept: usize,
+    missing: usize,
+}
+
+impl UninstallTotals {
+    fn record(&mut self, status: UninstallStatus) {
+        match status {
+            UninstallStatus::Removed => self.removed += 1,
+            UninstallStatus::Kept => self.kept += 1,
+            UninstallStatus::Missing => self.missing += 1,
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+struct UninstallTargetReport {
+    target: String,
+    totals: UninstallTotals,
+    files: Vec<UninstallFileReport>,
+}
+
+/// Everything an uninstall run did, one `UninstallTargetReport` per selected
+/// target root.
+#[derive(Debug, Serialize)]
+pub struct UninstallReport {
+    totals: UninstallTotals,
+    targets: Vec<UninstallTargetReport>,
+}
+
+/// Everything `gk init` did, in whichever direction it ran.
+#[derive(Debug, Serialize)]
+#[serde(untagged)]
+pub enum Report {
+    Install(InstallReport),
+    Uninstall(UninstallReport),
+}
+
 impl Report {
-    pub(crate) fn has_conflicts(&self) -> bool {
-        self.totals.conflicts > 0
+    /// Whether the caller should see a non-zero exit: an install conflict
+    /// left unresolved, or an uninstall that left a locally modified file in
+    /// place. Mirrors `--force` being the documented way past either.
+    pub(crate) fn is_failure(&self) -> bool {
+        match self {
+            Report::Install(report) => report.totals.conflicts > 0,
+            Report::Uninstall(report) => report.totals.kept > 0,
+        }
     }
 }
 
@@ -127,11 +211,28 @@ struct SkillItem {
     files: Vec<(PathBuf, Cow<'static, [u8]>)>,
 }
 
-/// Vendor the embedded skills into every target requested by `args`.
+/// A record of exactly what one `init` run placed at a target root — the
+/// source of truth `--uninstall` acts on, independent of whatever the
+/// currently running binary's embedded skills happen to be.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct ManifestEntry {
+    path: String,
+    sha256: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct Manifest {
+    gk_version: String,
+    files: Vec<ManifestEntry>,
+}
+
+/// Vendor the embedded skills into every target requested by `args`, or (with
+/// `--uninstall`) remove what a prior run of this placed there.
 ///
 /// A refusal (no target flag) and a real I/O error both come back as `Err`;
-/// a file conflict does not — it is a normal, reportable outcome, not a
-/// failure to run. The caller picks the exit code from `Report::has_conflicts`.
+/// a file conflict, or a kept file on uninstall, does not — either is a
+/// normal, reportable outcome, not a failure to run. The caller picks the
+/// exit code from `Report::is_failure`.
 pub fn run(args: Args) -> Result<Report, String> {
     if !args.claude && !args.codex {
         return Err(
@@ -148,6 +249,18 @@ pub fn run(args: Args) -> Result<Report, String> {
         roots.push(CODEX_ROOT);
     }
 
+    if args.uninstall {
+        if !args.experimental.is_empty() {
+            return Err(
+                "--uninstall does not take --experimental — it removes whatever each \
+                 target's manifest recorded, not whatever the running binary currently \
+                 embeds"
+                    .to_string(),
+            );
+        }
+        return run_uninstall(&roots, args.force).map(Report::Uninstall);
+    }
+
     let items = collect_items(&args.experimental)?;
 
     let mut totals = Totals::default();
@@ -157,6 +270,7 @@ pub fn run(args: Args) -> Result<Report, String> {
         let root_path = Path::new(root);
         let mut target_totals = Totals::default();
         let mut skills = Vec::with_capacity(items.len());
+        let mut manifest_entries = Vec::new();
 
         for item in &items {
             let mut file_reports = Vec::with_capacity(item.files.len());
@@ -165,6 +279,23 @@ pub fn run(args: Args) -> Result<Report, String> {
                 let status = place(&target, contents, args.force)?;
                 totals.record(status);
                 target_totals.record(status);
+
+                // Every other status means disk now holds exactly `contents`;
+                // only a left-alone conflict means disk still holds whatever
+                // was already there, foreign or a past local edit — hash that
+                // instead so the manifest reflects what is actually on disk.
+                let sha256 = if status == Status::Conflict {
+                    let bytes = std::fs::read(&target)
+                        .map_err(|err| format!("could not read {}: {err}", target.display()))?;
+                    hash(&bytes)
+                } else {
+                    hash(contents)
+                };
+                manifest_entries.push(ManifestEntry {
+                    path: rel.display().to_string(),
+                    sha256,
+                });
+
                 file_reports.push(FileReport {
                     path: rel.display().to_string(),
                     status,
@@ -176,6 +307,8 @@ pub fn run(args: Args) -> Result<Report, String> {
             });
         }
 
+        write_manifest(root_path, manifest_entries)?;
+
         targets.push(TargetReport {
             target: root.to_string(),
             totals: target_totals,
@@ -183,7 +316,116 @@ pub fn run(args: Args) -> Result<Report, String> {
         });
     }
 
-    Ok(Report { totals, targets })
+    Ok(Report::Install(InstallReport { totals, targets }))
+}
+
+/// Remove, from each target root, whatever that root's manifest says a prior
+/// install placed there. Never consults the embedded `SKILLS`/`EXPERIMENTAL`
+/// trees — the manifest is the only source of truth for what to remove.
+fn run_uninstall(roots: &[&str], force: bool) -> Result<UninstallReport, String> {
+    let mut totals = UninstallTotals::default();
+    let mut targets = Vec::with_capacity(roots.len());
+
+    for root in roots {
+        let root_path = Path::new(root);
+        let manifest_path = root_path.join(MANIFEST_FILENAME);
+
+        // A missing or corrupt manifest means nothing to do, not an error —
+        // running `--uninstall` twice (or on a target `init` never touched)
+        // is not a failure, matching install's own idempotency.
+        let manifest = match std::fs::read(&manifest_path) {
+            Ok(bytes) => serde_json::from_slice::<Manifest>(&bytes).ok(),
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => None,
+            Err(err) => return Err(format!("could not read {}: {err}", manifest_path.display())),
+        };
+
+        let Some(manifest) = manifest else {
+            targets.push(UninstallTargetReport {
+                target: root.to_string(),
+                totals: UninstallTotals::default(),
+                files: Vec::new(),
+            });
+            continue;
+        };
+
+        let mut entries = manifest.files;
+        entries.sort_by(|a, b| a.path.cmp(&b.path));
+
+        let mut target_totals = UninstallTotals::default();
+        let mut file_reports = Vec::with_capacity(entries.len());
+        let mut kept_entries = Vec::new();
+        let mut dirs: BTreeSet<PathBuf> = BTreeSet::new();
+
+        for entry in entries {
+            let target = root_path.join(&entry.path);
+
+            let status = match std::fs::read(&target) {
+                Err(err) if err.kind() == std::io::ErrorKind::NotFound => UninstallStatus::Missing,
+                Err(err) => return Err(format!("could not read {}: {err}", target.display())),
+                Ok(bytes) => {
+                    if force || hash(&bytes) == entry.sha256 {
+                        std::fs::remove_file(&target).map_err(|err| {
+                            format!("could not remove {}: {err}", target.display())
+                        })?;
+                        UninstallStatus::Removed
+                    } else {
+                        UninstallStatus::Kept
+                    }
+                }
+            };
+
+            if let Some(parent) = Path::new(&entry.path).parent() {
+                for ancestor in parent.ancestors() {
+                    if ancestor.as_os_str().is_empty() {
+                        continue;
+                    }
+                    dirs.insert(root_path.join(ancestor));
+                }
+            }
+
+            totals.record(status);
+            target_totals.record(status);
+            file_reports.push(UninstallFileReport {
+                path: entry.path.clone(),
+                status,
+            });
+            if status == UninstallStatus::Kept {
+                kept_entries.push(entry);
+            }
+        }
+
+        // Bottom-up: `remove_dir` refuses a non-empty directory on its own,
+        // so it is safe to attempt every touched ancestor and ignore the
+        // ones that still hold a kept file or something not gk's.
+        let mut dirs: Vec<PathBuf> = dirs.into_iter().collect();
+        dirs.sort_by_key(|dir| std::cmp::Reverse(dir.components().count()));
+        for dir in dirs {
+            let _ = std::fs::remove_dir(&dir);
+        }
+
+        if kept_entries.is_empty() {
+            match std::fs::remove_file(&manifest_path) {
+                Ok(()) => {}
+                Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+                Err(err) => {
+                    return Err(format!(
+                        "could not remove {}: {err}",
+                        manifest_path.display()
+                    ))
+                }
+            }
+        } else {
+            write_manifest(root_path, kept_entries)?;
+        }
+
+        targets.push(UninstallTargetReport {
+            target: root.to_string(),
+            totals: target_totals,
+            files: file_reports,
+        });
+    }
+
+    Ok(UninstallReport { totals, targets })
 }
 
 /// Every skill this run will place, content computed once regardless of how
@@ -371,7 +613,34 @@ fn place(target: &Path, contents: &[u8], force: bool) -> Result<Status, String> 
     Ok(status)
 }
 
+fn hash(bytes: &[u8]) -> String {
+    format!("{:x}", Sha256::digest(bytes))
+}
+
+/// Write the manifest for one target root, sorted by path — deterministic
+/// ordering, per `docs/tool-contract.md`.
+fn write_manifest(root: &Path, mut entries: Vec<ManifestEntry>) -> Result<(), String> {
+    entries.sort_by(|a, b| a.path.cmp(&b.path));
+    let manifest = Manifest {
+        gk_version: env!("CARGO_PKG_VERSION").to_string(),
+        files: entries,
+    };
+    let path = root.join(MANIFEST_FILENAME);
+    let json = serde_json::to_string_pretty(&manifest)
+        .map_err(|err| format!("could not serialize manifest: {err}"))?;
+    std::fs::write(&path, json).map_err(|err| format!("could not write {}: {err}", path.display()))
+}
+
 impl Human for Report {
+    fn human(&self) -> String {
+        match self {
+            Report::Install(report) => report.human(),
+            Report::Uninstall(report) => report.human(),
+        }
+    }
+}
+
+impl Human for InstallReport {
     fn human(&self) -> String {
         let mut out = String::new();
 
@@ -398,6 +667,32 @@ impl Human for Report {
 
         if self.totals.conflicts > 0 {
             out.push_str("\n  conflict: local changes would be overwritten — rerun with --force\n");
+        }
+
+        out.trim_end().to_string()
+    }
+}
+
+impl Human for UninstallReport {
+    fn human(&self) -> String {
+        let mut out = String::new();
+
+        for (i, target) in self.targets.iter().enumerate() {
+            if i > 0 {
+                out.push('\n');
+            }
+            out.push_str(&format!(
+                "{} · {} removed, {} kept, {} missing\n",
+                target.target, target.totals.removed, target.totals.kept, target.totals.missing,
+            ));
+
+            for file in &target.files {
+                out.push_str(&format!("  {:<8} {}\n", file.status.label(), file.path));
+            }
+        }
+
+        if self.totals.kept > 0 {
+            out.push_str("\n  kept: local changes would be lost — rerun with --force\n");
         }
 
         out.trim_end().to_string()
@@ -451,5 +746,58 @@ mod tests {
                 path.display()
             );
         }
+    }
+
+    fn decide_uninstall(
+        disk: Option<&[u8]>,
+        recorded_sha256: &str,
+        force: bool,
+    ) -> UninstallStatus {
+        match disk {
+            None => UninstallStatus::Missing,
+            Some(bytes) => {
+                if force || hash(bytes) == recorded_sha256 {
+                    UninstallStatus::Removed
+                } else {
+                    UninstallStatus::Kept
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_file_matching_its_recorded_hash_is_removed() {
+        let recorded = hash(b"content");
+        assert_eq!(
+            decide_uninstall(Some(b"content"), &recorded, false),
+            UninstallStatus::Removed
+        );
+    }
+
+    #[test]
+    fn a_file_whose_hash_differs_is_kept_without_force() {
+        let recorded = hash(b"original");
+        assert_eq!(
+            decide_uninstall(Some(b"edited"), &recorded, false),
+            UninstallStatus::Kept
+        );
+    }
+
+    #[test]
+    fn a_file_whose_hash_differs_is_removed_with_force() {
+        let recorded = hash(b"original");
+        assert_eq!(
+            decide_uninstall(Some(b"edited"), &recorded, true),
+            UninstallStatus::Removed
+        );
+    }
+
+    #[test]
+    fn a_manifest_entry_with_no_file_on_disk_is_missing() {
+        let recorded = hash(b"content");
+        assert_eq!(
+            decide_uninstall(None, &recorded, false),
+            UninstallStatus::Missing
+        );
     }
 }
