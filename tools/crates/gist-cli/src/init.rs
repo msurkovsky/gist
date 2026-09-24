@@ -24,7 +24,7 @@ use include_dir::{include_dir, Dir, File};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::borrow::Cow;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 static SKILLS: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/../../../skills");
@@ -203,12 +203,17 @@ impl Report {
     }
 }
 
+/// One file a skill places, path relative to a target root.
+struct PlacedFile {
+    path: PathBuf,
+    contents: Cow<'static, [u8]>,
+}
+
 /// One skill's files, computed once and placed as-is into every selected
 /// target root — content never varies by target, only the root does.
 struct SkillItem {
     name: String,
-    /// (path relative to a target root, contents)
-    files: Vec<(PathBuf, Cow<'static, [u8]>)>,
+    files: Vec<PlacedFile>,
 }
 
 /// A record of exactly what one `init` run placed at a target root — the
@@ -270,34 +275,36 @@ pub fn run(args: Args) -> Result<Report, String> {
         let root_path = Path::new(root);
         let mut target_totals = Totals::default();
         let mut skills = Vec::with_capacity(items.len());
-        let mut manifest_entries = Vec::new();
+        let mut manifest_entries: BTreeMap<String, String> =
+            read_manifest(&root_path.join(MANIFEST_FILENAME))?
+                .map(|manifest| {
+                    manifest
+                        .files
+                        .into_iter()
+                        .map(|entry| (entry.path, entry.sha256))
+                        .collect()
+                })
+                .unwrap_or_default();
 
         for item in &items {
             let mut file_reports = Vec::with_capacity(item.files.len());
-            for (rel, contents) in &item.files {
-                let target = root_path.join(rel);
-                let status = place(&target, contents, args.force)?;
+            for file in &item.files {
+                let target = root_path.join(&file.path);
+                let status = place(&target, &file.contents, args.force)?;
                 totals.record(status);
                 target_totals.record(status);
 
-                // Every other status means disk now holds exactly `contents`;
-                // only a left-alone conflict means disk still holds whatever
-                // was already there, foreign or a past local edit — hash that
-                // instead so the manifest reflects what is actually on disk.
-                let sha256 = if status == Status::Conflict {
-                    let bytes = std::fs::read(&target)
-                        .map_err(|err| format!("could not read {}: {err}", target.display()))?;
-                    hash(&bytes)
-                } else {
-                    hash(contents)
-                };
-                manifest_entries.push(ManifestEntry {
-                    path: rel.display().to_string(),
-                    sha256,
-                });
+                // A conflict means `place` left the existing file untouched,
+                // so this run placed nothing there: keep whatever an earlier
+                // run recorded (nothing, if the file was never gk's) rather
+                // than recording foreign content, or `--uninstall` would
+                // delete a file gk doesn't own.
+                if status != Status::Conflict {
+                    manifest_entries.insert(file.path.display().to_string(), hash(&file.contents));
+                }
 
                 file_reports.push(FileReport {
-                    path: rel.display().to_string(),
+                    path: file.path.display().to_string(),
                     status,
                 });
             }
@@ -307,7 +314,11 @@ pub fn run(args: Args) -> Result<Report, String> {
             });
         }
 
-        write_manifest(root_path, manifest_entries)?;
+        let entries = manifest_entries
+            .into_iter()
+            .map(|(path, sha256)| ManifestEntry { path, sha256 })
+            .collect();
+        write_manifest(root_path, entries)?;
 
         targets.push(TargetReport {
             target: root.to_string(),
@@ -333,13 +344,7 @@ fn run_uninstall(roots: &[&str], force: bool) -> Result<UninstallReport, String>
         // A missing or corrupt manifest means nothing to do, not an error —
         // running `--uninstall` twice (or on a target `init` never touched)
         // is not a failure, matching install's own idempotency.
-        let manifest = match std::fs::read(&manifest_path) {
-            Ok(bytes) => serde_json::from_slice::<Manifest>(&bytes).ok(),
-            Err(err) if err.kind() == std::io::ErrorKind::NotFound => None,
-            Err(err) => return Err(format!("could not read {}: {err}", manifest_path.display())),
-        };
-
-        let Some(manifest) = manifest else {
+        let Some(manifest) = read_manifest(&manifest_path)? else {
             targets.push(UninstallTargetReport {
                 target: root.to_string(),
                 totals: UninstallTotals::default(),
@@ -437,20 +442,13 @@ fn collect_items(experimental: &[String]) -> Result<Vec<SkillItem>, String> {
     skill_dirs.sort_by_key(|dir| dir.path());
 
     for skill_dir in skill_dirs {
-        let name = skill_dir
-            .path()
-            .file_name()
-            .and_then(|n| n.to_str())
-            .ok_or_else(|| format!("not a valid skill name: {}", skill_dir.path().display()))?
-            .to_string();
-
-        let mut files: Vec<&File> = Vec::new();
-        collect_files(skill_dir, &mut files);
-        files.sort_by_key(|file| file.path());
-
-        let files = files
+        let name = skill_name_of(skill_dir)?.to_string();
+        let files = sorted_files(skill_dir)
             .into_iter()
-            .map(|file| (file.path().to_path_buf(), Cow::Borrowed(file.contents())))
+            .map(|file| PlacedFile {
+                path: file.path().to_path_buf(),
+                contents: Cow::Borrowed(file.contents()),
+            })
             .collect();
 
         items.push(SkillItem { name, files });
@@ -467,19 +465,11 @@ fn collect_items(experimental: &[String]) -> Result<Vec<SkillItem>, String> {
         skill_dirs.sort_by_key(|dir| dir.path());
 
         for skill_dir in skill_dirs {
-            let skill_name = skill_dir
-                .path()
-                .file_name()
-                .and_then(|n| n.to_str())
-                .ok_or_else(|| format!("not a valid skill name: {}", skill_dir.path().display()))?;
+            let skill_name = skill_name_of(skill_dir)?;
             let new_name = format!("{package}-{skill_name}");
 
-            let mut files: Vec<&File> = Vec::new();
-            collect_files(skill_dir, &mut files);
-            files.sort_by_key(|file| file.path());
-
-            let mut file_entries = Vec::with_capacity(files.len());
-            for file in files {
+            let mut files = Vec::new();
+            for file in sorted_files(skill_dir) {
                 let rel = file
                     .path()
                     .strip_prefix(skill_dir.path())
@@ -494,17 +484,36 @@ fn collect_items(experimental: &[String]) -> Result<Vec<SkillItem>, String> {
                     Cow::Borrowed(file.contents())
                 };
 
-                file_entries.push((Path::new(&new_name).join(rel), contents));
+                files.push(PlacedFile {
+                    path: Path::new(&new_name).join(rel),
+                    contents,
+                });
             }
 
             items.push(SkillItem {
                 name: new_name,
-                files: file_entries,
+                files,
             });
         }
     }
 
     Ok(items)
+}
+
+/// A skill directory's name, taken from its own path.
+fn skill_name_of<'a>(dir: &'a Dir<'a>) -> Result<&'a str, String> {
+    dir.path()
+        .file_name()
+        .and_then(|n| n.to_str())
+        .ok_or_else(|| format!("not a valid skill name: {}", dir.path().display()))
+}
+
+/// Every file under a skill directory, sorted for deterministic output.
+fn sorted_files<'a>(dir: &'a Dir<'a>) -> Vec<&'a File<'a>> {
+    let mut files = Vec::new();
+    collect_files(dir, &mut files);
+    files.sort_by_key(|file| file.path());
+    files
 }
 
 /// The `skills/` dir inside `experimental/<package>`, or an error listing
@@ -615,6 +624,15 @@ fn place(target: &Path, contents: &[u8], force: bool) -> Result<Status, String> 
 
 fn hash(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
+}
+
+/// The manifest at `path`, or `None` when it is absent or unparseable.
+fn read_manifest(path: &Path) -> Result<Option<Manifest>, String> {
+    match std::fs::read(path) {
+        Ok(bytes) => Ok(serde_json::from_slice(&bytes).ok()),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(err) => Err(format!("could not read {}: {err}", path.display())),
+    }
 }
 
 /// Write the manifest for one target root, sorted by path — deterministic

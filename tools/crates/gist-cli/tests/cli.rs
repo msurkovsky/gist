@@ -799,6 +799,73 @@ fn init_claude_uninstall_keeps_locally_modified_files_and_reports_them() {
 }
 
 #[test]
+fn init_claude_uninstall_does_not_delete_a_file_that_conflicted_at_install_time() {
+    let repo = Repo::new();
+    repo.write(
+        ".claude/skills/gist-outline/SKILL.md",
+        "pre-existing, not gk's\n",
+    );
+
+    let (code, stdout, _) = repo.gk(&["init", "--claude", "--json"]);
+    assert_eq!(code, 1);
+    let value: Value = serde_json::from_str(&stdout).expect("stdout is json");
+    assert_eq!(value["data"]["totals"]["conflicts"], 1);
+
+    let manifest = manifest(&repo, ".claude/skills");
+    let files = manifest["files"].as_array().expect("files array");
+    assert!(
+        !files.iter().any(|f| f["path"] == "gist-outline/SKILL.md"),
+        "a conflicted file was never placed, so the manifest must not record it"
+    );
+
+    let data = repo.data(&["init", "--claude", "--uninstall"]);
+    assert_eq!(data["totals"]["kept"], 0);
+    assert_eq!(data["totals"]["removed"], embedded_skill_file_count() - 1);
+
+    let contents =
+        std::fs::read_to_string(repo.path().join(".claude/skills/gist-outline/SKILL.md"))
+            .expect("read");
+    assert_eq!(
+        contents, "pre-existing, not gk's\n",
+        "uninstall must not delete a file gk never placed"
+    );
+}
+
+#[test]
+fn a_conflict_on_rerun_keeps_the_hash_the_first_run_recorded() {
+    let repo = Repo::new();
+    repo.data(&["init", "--claude"]);
+    repo.write(".claude/skills/gist-outline/SKILL.md", "locally modified\n");
+
+    let (code, _, _) = repo.gk(&["init", "--claude", "--json"]);
+    assert_eq!(code, 1);
+
+    let (code, stdout, _) = repo.gk(&["init", "--claude", "--uninstall", "--json"]);
+    assert_eq!(code, 1);
+    let value: Value = serde_json::from_str(&stdout).expect("stdout is json");
+    assert_eq!(value["data"]["totals"]["kept"], 1);
+
+    let contents =
+        std::fs::read_to_string(repo.path().join(".claude/skills/gist-outline/SKILL.md"))
+            .expect("read");
+    assert_eq!(contents, "locally modified\n");
+}
+
+#[test]
+fn rerunning_without_experimental_keeps_earlier_experimental_files_tracked() {
+    let repo = Repo::new();
+    repo.data(&["init", "--claude", "--experimental=mattpocock"]);
+    repo.data(&["init", "--claude"]);
+
+    let manifest = manifest(&repo, ".claude/skills");
+    let files = manifest["files"].as_array().expect("files array");
+    assert!(files.iter().any(|f| f["path"] == "mattpocock-tdd/SKILL.md"));
+
+    repo.data(&["init", "--claude", "--uninstall"]);
+    assert!(!repo.path().join(".claude/skills/mattpocock-tdd").exists());
+}
+
+#[test]
 fn init_claude_uninstall_force_removes_everything() {
     let repo = Repo::new();
     repo.data(&["init", "--claude"]);

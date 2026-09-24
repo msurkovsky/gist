@@ -44,9 +44,13 @@ just replaying the file list.
 
 Every `init` run that touches a target root — `.claude/skills` or
 `.agents/skills` — writes `<root>/.gist-manifest.json` at the end of the run:
-`{gk_version, files: [{path, sha256}, ...]}`, sorted by `path`, reflecting
-whatever is actually on disk at that root afterward (not a diff against the
-embedded tree). Dot-prefixed so it reads as tool metadata, not a skill
+`{gk_version, files: [{path, sha256}, ...]}`, sorted by `path`, recording only
+what gk placed. Each run merges into the previous manifest: a file placed or
+found identical gets the hash of the embedded content, a file left alone as a
+conflict keeps whatever an earlier run recorded (nothing, if it was never
+gk's), and files outside this run's selection stay recorded. Recording a
+conflicted file's on-disk hash would let `--uninstall` delete a file gk never
+wrote. Dot-prefixed so it reads as tool metadata, not a skill
 directory — Claude Code's discovery only looks for `<dir>/SKILL.md` and never
 trips on it.
 
