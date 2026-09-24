@@ -227,6 +227,7 @@ struct ManifestEntry {
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Manifest {
+    /// For debugging, and later for flagging outdated skills; nothing reads it yet.
     gk_version: String,
     files: Vec<ManifestEntry>,
 }

@@ -45,7 +45,8 @@ just replaying the file list.
 Every `init` run that touches a target root — `.claude/skills` or
 `.agents/skills` — writes `<root>/.gist-manifest.json` at the end of the run:
 `{gk_version, files: [{path, sha256}, ...]}`, sorted by `path`, recording only
-what gk placed. Each run merges into the previous manifest: a file placed or
+what gk placed. `gk_version` is for debugging and, later, for telling a user
+their installed skills predate the running `gk`; nothing reads it yet. Each run merges into the previous manifest: a file placed or
 found identical gets the hash of the embedded content, a file left alone as a
 conflict keeps whatever an earlier run recorded (nothing, if it was never
 gk's), and files outside this run's selection stay recorded. Recording a
@@ -123,5 +124,11 @@ nothing on disk) with no I/O. `tests/cli.rs` end-to-end:
 `init_claude_uninstall_handles_a_file_already_deleted_by_hand`,
 `init_claude_uninstall_with_no_prior_install_is_a_zero_op_not_an_error`,
 `init_claude_uninstall_human_output_lists_kept_files_and_the_force_hint`,
-`init_uninstall_with_experimental_is_a_refusal`, and
-`init_claude_uninstall_does_not_touch_a_codex_target_left_unselected`.
+`init_uninstall_with_experimental_is_a_refusal`,
+`init_claude_uninstall_does_not_touch_a_codex_target_left_unselected`,
+`init_claude_uninstall_does_not_delete_a_file_that_conflicted_at_install_time`,
+`a_conflict_on_rerun_keeps_the_hash_the_first_run_recorded`,
+`rerunning_without_experimental_keeps_earlier_experimental_files_tracked`,
+`init_refuses_to_overwrite_a_corrupt_manifest`,
+`init_claude_uninstall_with_a_corrupt_manifest_is_a_zero_op`, and
+`an_io_failure_partway_still_records_the_files_already_placed`.
