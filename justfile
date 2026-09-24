@@ -15,10 +15,10 @@ test:
     cargo test --manifest-path {{tools}}/Cargo.toml
 
 fmt:
-    cargo fmt --manifest-path {{tools}}/Cargo.toml
+    cargo fmt --manifest-path {{tools}}/Cargo.toml --all
 
 lint:
-    cargo fmt --manifest-path {{tools}}/Cargo.toml --check
+    cargo fmt --manifest-path {{tools}}/Cargo.toml --all --check
     cargo clippy --manifest-path {{tools}}/Cargo.toml --all-targets -- -D warnings
 
 # Everything CI runs, locally.
