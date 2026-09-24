@@ -45,7 +45,9 @@ Without `just`: `cargo <cmd> --manifest-path tools/Cargo.toml`.
 
 # Working in this repository
 
-Read `README.md` for the layout and lifecycle. Rules that are easy to break:
+Read `README.md` for the layout and lifecycle, `CONTRIBUTING.md` for the recipe for each
+kind of change. Run `tools/check.sh` before every commit; it enforces the rules below and
+exits non-zero on a violation. Rules that are easy to break:
 
 - Never edit anything under `experimental/`. It is vendored upstream history. To change a
   vendored skill, copy it into `skills/<name>/` first, note the source in its frontmatter,

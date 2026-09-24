@@ -76,8 +76,11 @@ languages/_template/      the adapter contract to copy for a new language
 rules/                    always-on constraints to drop into a project's CLAUDE.md or .claude/rules/
 hooks/                    deterministic guards: git hooks and Claude Code hooks
 views/<consumer>/         workspace.josh files defining what a consumer sees
-tools/                    vendor.sh (import/update), link.sh (quick local symlink)
+tools/                    vendor.sh (import/update), link.sh (quick local symlink), check.sh (pre-commit checks)
 ```
+
+Contributing: `CONTRIBUTING.md` has a recipe per kind of change, `CLAUDE.md` the rules
+agents must not break, `tools/check.sh` the mechanical enforcement of both.
 
 ## Lifecycle
 
