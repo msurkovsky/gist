@@ -70,15 +70,39 @@ impl Repo {
         )
     }
 
-    /// Run `gk --json` and unwrap the success envelope.
-    fn data(&self, args: &[&str]) -> Value {
+    /// Run `gk <args> --json` and return (exit code, stdout, stderr).
+    fn gk_json(&self, args: &[&str]) -> (i32, String, String) {
         let mut with_json = args.to_vec();
         with_json.push("--json");
-        let (code, stdout, stderr) = self.gk(&with_json);
-        assert_eq!(code, 0, "gk {args:?} failed: {stderr}");
-        let value: Value = serde_json::from_str(&stdout).expect("stdout is json");
+        self.gk(&with_json)
+    }
+
+    /// Run `gk --json` and return the exit code with the success envelope's
+    /// data, for commands that report a result yet exit non-zero.
+    fn data_with_code(&self, args: &[&str]) -> (i32, Value) {
+        let (code, stdout, stderr) = self.gk_json(args);
+        let value: Value = serde_json::from_str(&stdout).unwrap_or_else(|err| {
+            panic!("gk {args:?} printed no json on stdout ({err}); stderr: {stderr}")
+        });
         assert_eq!(value["status"], "ok");
-        value["data"].clone()
+        (code, value["data"].clone())
+    }
+
+    /// Run `gk --json` and unwrap the success envelope.
+    fn data(&self, args: &[&str]) -> Value {
+        let (code, data) = self.data_with_code(args);
+        assert_eq!(code, 0, "gk {args:?} exited {code}");
+        data
+    }
+
+    /// Run `gk --json` expecting a failure: the exit code and the message
+    /// from the error envelope on stderr.
+    fn error(&self, args: &[&str]) -> (i32, String) {
+        let (code, _, stderr) = self.gk_json(args);
+        let value: Value = serde_json::from_str(&stderr).expect("error envelope on stderr");
+        assert_eq!(value["status"], "error");
+        let message = value["message"].as_str().expect("message");
+        (code, message.to_string())
     }
 }
 
@@ -303,19 +327,10 @@ fn whole_file_mode_needs_no_git_repository() {
 #[test]
 fn a_missing_path_is_an_expected_failure() {
     let repo = Repo::new();
-    let (code, _, stderr) = repo.gk(&["doc", "--files", "nope", "--json"]);
+    let (code, message) = repo.error(&["doc", "--files", "nope"]);
 
     assert_eq!(code, 1, "expected failure, not misuse");
-    let value: Value = serde_json::from_str(&stderr).expect("error envelope on stderr");
-    assert_eq!(value["status"], "error");
-    assert!(
-        value["message"]
-            .as_str()
-            .expect("message")
-            .contains("no such path"),
-        "got: {}",
-        value["message"]
-    );
+    assert!(message.contains("no such path"), "got: {message}");
 }
 
 #[test]
@@ -470,12 +485,9 @@ fn init_claude_is_idempotent_on_a_second_run() {
 #[test]
 fn init_without_a_target_is_a_refusal_not_misuse() {
     let repo = Repo::new();
-    let (code, _, stderr) = repo.gk(&["init", "--json"]);
+    let (code, message) = repo.error(&["init"]);
 
     assert_eq!(code, 1, "expected refusal, not misuse");
-    let value: Value = serde_json::from_str(&stderr).expect("error envelope on stderr");
-    assert_eq!(value["status"], "error");
-    let message = value["message"].as_str().expect("message");
     assert!(message.contains("--claude"), "got: {message}");
     assert!(message.contains("--codex"), "got: {message}");
 }
@@ -483,11 +495,9 @@ fn init_without_a_target_is_a_refusal_not_misuse() {
 #[test]
 fn init_experimental_alone_is_still_a_refusal_no_implicit_target() {
     let repo = Repo::new();
-    let (code, _, stderr) = repo.gk(&["init", "--experimental=mattpocock", "--json"]);
+    let (code, _) = repo.error(&["init", "--experimental=mattpocock"]);
 
     assert_eq!(code, 1, "expected refusal, not a guess at which target");
-    let value: Value = serde_json::from_str(&stderr).expect("error envelope on stderr");
-    assert_eq!(value["status"], "error");
 }
 
 #[test]
@@ -496,11 +506,9 @@ fn init_claude_reports_a_conflict_and_leaves_the_file_untouched() {
     repo.data(&["init", "--claude"]);
     repo.write(".claude/skills/gist-outline/SKILL.md", "locally modified\n");
 
-    let (code, stdout, _) = repo.gk(&["init", "--claude", "--json"]);
+    let (code, data) = repo.data_with_code(&["init", "--claude"]);
     assert_eq!(code, 1);
-    let value: Value = serde_json::from_str(&stdout).expect("stdout is json");
-    assert_eq!(value["status"], "ok");
-    assert_eq!(value["data"]["totals"]["conflicts"], 1);
+    assert_eq!(data["totals"]["conflicts"], 1);
 
     let contents =
         std::fs::read_to_string(repo.path().join(".claude/skills/gist-outline/SKILL.md"))
@@ -628,12 +636,9 @@ fn init_experimental_is_idempotent_on_a_second_run() {
 #[test]
 fn init_experimental_unknown_package_names_what_is_available() {
     let repo = Repo::new();
-    let (code, _, stderr) = repo.gk(&["init", "--claude", "--experimental=nope", "--json"]);
+    let (code, message) = repo.error(&["init", "--claude", "--experimental=nope"]);
 
     assert_eq!(code, 1, "expected refusal, not misuse");
-    let value: Value = serde_json::from_str(&stderr).expect("error envelope on stderr");
-    assert_eq!(value["status"], "error");
-    let message = value["message"].as_str().expect("message");
     assert!(message.contains("nope"), "got: {message}");
     assert!(message.contains("mattpocock"), "got: {message}");
 }
@@ -775,14 +780,10 @@ fn init_claude_uninstall_keeps_locally_modified_files_and_reports_them() {
     repo.data(&["init", "--claude"]);
     repo.write(".claude/skills/gist-outline/SKILL.md", "locally modified\n");
 
-    let (code, stdout, _) = repo.gk(&["init", "--claude", "--uninstall", "--json"]);
+    let (code, data) = repo.data_with_code(&["init", "--claude", "--uninstall"]);
     assert_eq!(code, 1);
-    let value: Value = serde_json::from_str(&stdout).expect("stdout is json");
-    assert_eq!(value["data"]["totals"]["kept"], 1);
-    assert_eq!(
-        value["data"]["totals"]["removed"],
-        embedded_skill_file_count() - 1
-    );
+    assert_eq!(data["totals"]["kept"], 1);
+    assert_eq!(data["totals"]["removed"], embedded_skill_file_count() - 1);
 
     let contents =
         std::fs::read_to_string(repo.path().join(".claude/skills/gist-outline/SKILL.md"))
@@ -806,10 +807,9 @@ fn init_claude_uninstall_does_not_delete_a_file_that_conflicted_at_install_time(
         "pre-existing, not gk's\n",
     );
 
-    let (code, stdout, _) = repo.gk(&["init", "--claude", "--json"]);
+    let (code, data) = repo.data_with_code(&["init", "--claude"]);
     assert_eq!(code, 1);
-    let value: Value = serde_json::from_str(&stdout).expect("stdout is json");
-    assert_eq!(value["data"]["totals"]["conflicts"], 1);
+    assert_eq!(data["totals"]["conflicts"], 1);
 
     let manifest = manifest(&repo, ".claude/skills");
     let files = manifest["files"].as_array().expect("files array");
@@ -837,13 +837,12 @@ fn a_conflict_on_rerun_keeps_the_hash_the_first_run_recorded() {
     repo.data(&["init", "--claude"]);
     repo.write(".claude/skills/gist-outline/SKILL.md", "locally modified\n");
 
-    let (code, _, _) = repo.gk(&["init", "--claude", "--json"]);
+    let (code, _) = repo.data_with_code(&["init", "--claude"]);
     assert_eq!(code, 1);
 
-    let (code, stdout, _) = repo.gk(&["init", "--claude", "--uninstall", "--json"]);
+    let (code, data) = repo.data_with_code(&["init", "--claude", "--uninstall"]);
     assert_eq!(code, 1);
-    let value: Value = serde_json::from_str(&stdout).expect("stdout is json");
-    assert_eq!(value["data"]["totals"]["kept"], 1);
+    assert_eq!(data["totals"]["kept"], 1);
 
     let contents =
         std::fs::read_to_string(repo.path().join(".claude/skills/gist-outline/SKILL.md"))
@@ -872,11 +871,8 @@ fn an_io_failure_partway_still_records_the_files_already_placed() {
     // then the run fails on this one.
     repo.write(".claude/skills/gist-outline", "in the way");
 
-    let (code, _, stderr) = repo.gk(&["init", "--claude", "--json"]);
+    let (code, message) = repo.error(&["init", "--claude"]);
     assert_eq!(code, 1);
-    let value: Value = serde_json::from_str(&stderr).expect("error envelope on stderr");
-    assert_eq!(value["status"], "error");
-    let message = value["message"].as_str().expect("message");
     assert!(message.contains("gist-outline"), "got: {message}");
 
     let manifest = manifest(&repo, ".claude/skills");
@@ -899,11 +895,8 @@ fn init_refuses_to_overwrite_a_corrupt_manifest() {
     let repo = Repo::new();
     repo.write(".claude/skills/.gist-manifest.json", "not json");
 
-    let (code, _, stderr) = repo.gk(&["init", "--claude", "--json"]);
+    let (code, message) = repo.error(&["init", "--claude"]);
     assert_eq!(code, 1, "expected refusal, not misuse");
-    let value: Value = serde_json::from_str(&stderr).expect("error envelope on stderr");
-    assert_eq!(value["status"], "error");
-    let message = value["message"].as_str().expect("message");
     assert!(message.contains(".gist-manifest.json"), "got: {message}");
 
     let contents = std::fs::read_to_string(repo.path().join(".claude/skills/.gist-manifest.json"))
@@ -989,17 +982,13 @@ fn init_uninstall_with_experimental_is_a_refusal() {
     let repo = Repo::new();
     repo.data(&["init", "--claude", "--experimental=mattpocock"]);
 
-    let (code, _, stderr) = repo.gk(&[
+    let (code, message) = repo.error(&[
         "init",
         "--claude",
         "--uninstall",
         "--experimental=mattpocock",
-        "--json",
     ]);
     assert_eq!(code, 1, "expected refusal, not misuse");
-    let value: Value = serde_json::from_str(&stderr).expect("error envelope on stderr");
-    assert_eq!(value["status"], "error");
-    let message = value["message"].as_str().expect("message");
     assert!(message.contains("--experimental"), "got: {message}");
 }
 
