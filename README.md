@@ -15,7 +15,18 @@ the work, read the shape of what came back, catch the wrong turn, and decide.
 skills/     the product — one directory per skill, embedded into gk
 tools/      cargo workspace; builds the gk binary
 docs/       tool contract, and decisions in docs/adr
+TODO.md     what comes next; the plans behind it live in .todo/
 ```
+
+## Skills
+
+| skill | for |
+|---|---|
+| `gist-outline` | the shape of a codebase — file counts, dominant languages, where the weight sits. Orienting in an unfamiliar repo |
+| `gist-doc-review` | the comments and doc strings in a change — cut what restates the code, shorten the bloated, add the missing line on public API |
+
+Once vendored with `gk init --claude`, invoke them in Claude Code as
+`/gist-outline` and `/gist-doc-review`.
 
 ## Build
 
