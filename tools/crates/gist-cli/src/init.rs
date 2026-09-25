@@ -577,6 +577,14 @@ fn collect_items(experimental: &[String]) -> Result<Vec<SkillItem>, String> {
         find_skill_dirs(skills_root, &mut skill_dirs);
         skill_dirs.sort_by_key(|dir| dir.path());
 
+        let names = crate::skill::namespace(
+            &package,
+            skill_dirs
+                .iter()
+                .map(|dir| skill_name_of(dir).map(str::to_string))
+                .collect::<Result<Vec<_>, _>>()?,
+        )?;
+
         for skill_dir in skill_dirs {
             let skill_name = skill_name_of(skill_dir)?;
             let new_name = format!("{package}-{skill_name}");
@@ -588,11 +596,19 @@ fn collect_items(experimental: &[String]) -> Result<Vec<SkillItem>, String> {
                     .strip_prefix(skill_dir.path())
                     .expect("file is under its own skill dir");
 
-                let contents: Cow<'static, [u8]> = if rel == Path::new("SKILL.md") {
-                    Cow::Owned(
+                let contents: Cow<'static, [u8]> = if rel
+                    .extension()
+                    .is_some_and(|ext| matches!(ext.to_str(), Some("md" | "yaml" | "yml")))
+                {
+                    let bytes = if rel == Path::new("SKILL.md") {
                         rewrite_skill_name(file.contents(), skill_name, &new_name)
-                            .map_err(|err| format!("{}: {err}", file.path().display()))?,
-                    )
+                            .map_err(|err| format!("{}: {err}", file.path().display()))?
+                    } else {
+                        file.contents().to_vec()
+                    };
+                    let text = std::str::from_utf8(&bytes)
+                        .map_err(|e| format!("{}: {e}", file.path().display()))?;
+                    Cow::Owned(crate::skill::rewrite_references(text, &names).into_bytes())
                 } else {
                     Cow::Borrowed(file.contents())
                 };
@@ -669,31 +685,27 @@ fn find_skill_dirs<'a>(dir: &'a Dir<'a>, out: &mut Vec<&'a Dir<'a>>) {
 /// installed at.
 fn rewrite_skill_name(contents: &[u8], old_name: &str, new_name: &str) -> Result<Vec<u8>, String> {
     let text = std::str::from_utf8(contents).map_err(|_| "not valid utf-8".to_string())?;
-    let needle = format!("name: {old_name}");
-    let replacement = format!("name: {new_name}");
-
-    let mut found = false;
-    let lines: Vec<&str> = text
-        .lines()
-        .map(|line| {
-            if !found && line.trim() == needle {
-                found = true;
-                replacement.as_str()
-            } else {
-                line
-            }
-        })
-        .collect();
-
-    if !found {
-        return Err(format!("frontmatter has no `{needle}` line to rewrite"));
+    let metadata = crate::skill::parse(text)?;
+    if metadata.fields["name"] != old_name {
+        return Err(format!(
+            "frontmatter name does not match directory {old_name}"
+        ));
     }
-
-    let mut out = lines.join("\n");
-    if text.ends_with('\n') {
-        out.push('\n');
-    }
-    Ok(out.into_bytes())
+    // Preserve upstream prose and unrelated metadata. Block-style name scalars
+    // need an explicit packaging decision instead of leaving orphan YAML lines.
+    let name = regex::Regex::new(r#"(?m)^(name: *(?:[a-z0-9-]+|"[a-z0-9-]+"|'[a-z0-9-]+') *)\r?$"#)
+        .unwrap();
+    let matched = name
+        .captures(metadata.header)
+        .and_then(|caps| caps.get(1))
+        .ok_or("frontmatter name must be a single top-level scalar line")?;
+    let header_start = text.find('\n').expect("validated frontmatter opening") + 1;
+    let mut output = text.to_string();
+    output.replace_range(
+        header_start + matched.start()..header_start + matched.end(),
+        &format!("name: {new_name}"),
+    );
+    Ok(output.into_bytes())
 }
 
 fn collect_files<'a>(dir: &'a Dir<'a>, out: &mut Vec<&'a File<'a>>) {
@@ -1010,14 +1022,46 @@ mod tests {
 
     #[test]
     fn rewrite_skill_name_keeps_a_missing_trailing_newline_missing() {
-        let out = rewrite_skill_name(b"name: tdd", "tdd", "matt-tdd").expect("rewrites");
-        assert_eq!(out, b"name: matt-tdd");
+        let out = rewrite_skill_name(
+            b"---\nname: tdd\ndescription: x\n---\nbody",
+            "tdd",
+            "matt-tdd",
+        )
+        .expect("rewrites");
+        assert_eq!(out, b"---\nname: matt-tdd\ndescription: x\n---\nbody");
+    }
+
+    // Case: docs/cases/packaging.md#package-line-endings
+    #[test]
+    fn review_fix_name_rewrite_preserves_original_line_endings_and_eof() {
+        for newline in ["\n", "\r\n"] {
+            for ending in ["", newline] {
+                let source =
+                    format!("---{newline}name: tdd{newline}description: x{newline}---{ending}");
+                let expected = format!(
+                    "---{newline}name: matt-tdd{newline}description: x{newline}---{ending}"
+                );
+                assert_eq!(
+                    rewrite_skill_name(source.as_bytes(), "tdd", "matt-tdd").unwrap(),
+                    expected.as_bytes()
+                );
+            }
+        }
+        let source = b"---\r\nname: tdd\ndescription: x\r\n---\r\nbody\n";
+        assert_eq!(
+            rewrite_skill_name(source, "tdd", "matt-tdd").unwrap(),
+            b"---\r\nname: matt-tdd\ndescription: x\r\n---\r\nbody\n"
+        );
     }
 
     #[test]
     fn rewrite_skill_name_errors_instead_of_guessing() {
-        let missing = rewrite_skill_name(b"---\nname: other\n---\n", "tdd", "matt-tdd");
-        assert!(missing.unwrap_err().contains("name: tdd"));
+        let missing = rewrite_skill_name(
+            b"---\nname: other\ndescription: x\n---\n",
+            "tdd",
+            "matt-tdd",
+        );
+        assert!(missing.unwrap_err().contains("directory tdd"));
 
         let binary = rewrite_skill_name(&[0xff, 0xfe], "tdd", "matt-tdd");
         assert!(binary.unwrap_err().contains("utf-8"));

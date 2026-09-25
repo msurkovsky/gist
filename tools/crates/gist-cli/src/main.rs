@@ -3,10 +3,12 @@
 //! Tools here are called by an agent far more often than by a person, so the
 //! defaults lean that way: no prompts, no spinners, bounded output.
 
+mod check;
 mod doc;
 mod hook;
 mod init;
 mod outline;
+mod skill;
 
 use clap::{Parser, Subcommand};
 use gist_core::{emit, emit_status, exit, fail, Human};
@@ -30,6 +32,8 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Validate a Gist source checkout without installing anything
+    Check(check::Args),
     /// Summarize the shape of a tree: how many files, which languages, how big
     Outline {
         /// Directory to summarize
@@ -60,6 +64,16 @@ fn main() -> ExitCode {
     let cli = Cli::parse();
 
     let result = match cli.command {
+        Command::Check(args) => check::run(args)
+            .map(|report| {
+                let code = if report.is_failure() {
+                    exit::FAILURE
+                } else {
+                    exit::OK
+                };
+                emit_status(report, code, cli.json)
+            })
+            .map_err(|message| fail(message, exit::FAILURE, cli.json)),
         Command::Outline { path, limit, all } => outline::outline(&path, limit, all)
             .map(|report| emit(report, cli.json))
             .map_err(|message| fail(message, exit::FAILURE, cli.json)),

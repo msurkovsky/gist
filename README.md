@@ -26,7 +26,10 @@ MANIFESTO.md    the premise: prose is the source, code is the build, review move
 
 `MANIFESTO.md` has the premise the rest follows from — read it first if you want to
 know whether this is for you. `CONTRIBUTING.md` has a recipe per kind of change,
-`CLAUDE.md` the rules agents must not break, `just ci` the enforcement of both.
+`AGENTS.md` and `CLAUDE.md` route agents to shared guidance. Start with
+`docs/architecture.md` for the system and `docs/skill-contract.md` before adding
+skills. `just ci` checks mechanical properties; it does not replace human review
+or behavioral evaluation.
 
 ## Skills
 
@@ -35,8 +38,9 @@ know whether this is for you. `CONTRIBUTING.md` has a recipe per kind of change,
 | `gist-outline` | the shape of a codebase — file counts, dominant languages, where the weight sits. Orienting in an unfamiliar repo |
 | `gist-doc-review` | the comments and doc strings in a change — cut what restates the code, shorten the bloated, add the missing line on public API |
 
-Both run when the model sees a request that matches their description, or on demand as
-`/gist-outline` and `/gist-doc-review`.
+Both support implicit selection. Invoke explicitly with `/gist-outline` or
+`/gist-doc-review` in Claude Code, and `$gist-outline` or `$gist-doc-review` in
+Codex. Host evaluation status and acceptance scenarios live in `docs/cases/`.
 
 For the rest of a change's life, use the vendored `mattpocock` skills, installed with
 `gk init --claude --experimental=mattpocock`: `/mattpocock-code-review` before opening an
@@ -49,6 +53,11 @@ MR, such as backup refs before a rewrite, reply format, and supersede order, are
 
 ## Build
 
+Needs a current stable Rust toolchain (including rustfmt and Clippy), a C compiler,
+Git, Bash, and `just`. CI runs on Linux; macOS remains unverified. Josh is only
+needed for importing vendors or using views. Repository checks need full Git
+history to resolve recorded imports.
+
 ```bash
 just ci        # fmt, clippy, test, scripts/check.sh
 just install   # put gk on PATH
@@ -59,6 +68,7 @@ just install   # put gk on PATH
 ```bash
 gk outline .                       # what shape is this repo
 gk doc                             # how much of my change is documentation
+gk check .                         # validate a Gist source checkout and its vendor content
 gk init --claude                   # vendor the skills into ./.claude/skills/ of the repo you are in
 gk init --codex                    # same skills, byte-identical, into ./.agents/skills/ for Codex CLI
 gk init --claude --codex --experimental=mattpocock  # any combination, one call
@@ -160,5 +170,6 @@ Its `/setup-matt-pocock-skills` runs in a consuming project, not here.
 
 ## Status
 
-Early. Two skills, four tools, one vendored upstream, and a contract to keep the rest
-honest.
+Early. Two skills, five command groups, one vendored upstream. Mechanical checks
+and behavior cases are in place; actual host evaluations and automated coherence
+review remain tracked work in `TODO.md`.

@@ -1,4 +1,5 @@
 //! Getting added lines out of git.
+//! Decision: docs/adr/0001-diff-with-libgit2.md.
 //!
 //! libgit2 does the diffing, asked for zero context lines — which means block
 //! comment state cannot be recovered from the diff alone. Wherever the

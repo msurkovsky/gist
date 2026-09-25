@@ -1,4 +1,5 @@
 //! `gk outline` — the shape of a tree, before reading anything in it.
+//! Behavior: docs/cases/gist-outline.md.
 
 use gist_core::Human;
 use ignore::WalkBuilder;

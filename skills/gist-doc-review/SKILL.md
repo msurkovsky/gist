@@ -29,6 +29,9 @@ gk doc --range A..B --json
 
 Read `totals.ratio`, `files[]`, and `runs[]` (comment blocks ≥2 lines, longest
 first). One-line asides are excluded by default — that is the point.
+If the tool or repository is unavailable, identify the missing measurement.
+Continue from a supplied diff when sufficient; never invent a ratio or install
+tools as a side effect of review.
 
 **2. Triage with the runs, not the ratio.**
 
@@ -48,7 +51,7 @@ rule 2 violation.
 **4. Check the other direction.**
 
 Find public items in the change with no doc line at all. Per-language patterns:
-`references/public-surface.md`. Every one of them is a rule 4 finding.
+[references/public-surface.md](references/public-surface.md). Every one of them is a rule 4 finding.
 
 **5. Report.** Do not edit yet. Findings first, fixes when asked.
 

@@ -15,8 +15,10 @@ Codex CLI has its own skill discovery, per official docs
 `.agents/skills/` (scanned upward from the working directory to the repo
 root) or a user-global `$HOME/.agents/skills/`. The `SKILL.md` format itself
 — YAML frontmatter with `name:`/`description:`, a Markdown body — is the same
-"open agent skills standard" both agents read; nothing in it is
-Claude-specific. `experimental/mattpocock/skills/**` already proves this: its
+"open agent skills standard" both agents read. Shared syntax does not guarantee
+equivalent invocation policy or available tools: owned skill authoring follows
+`docs/skill-contract.md`, with matching explicit-only policy in both frontmatter
+and `agents/openai.yaml`. `experimental/mattpocock/skills/**` demonstrates this: its
 skill directories carry a Codex-only optional sidecar,
 `agents/openai.yaml` (display name, icon, invocation policy), sitting next to
 the exact same `SKILL.md` Claude Code reads, copied through untouched by
@@ -116,5 +118,7 @@ proposed here is Codex-specific beyond the root path itself.
 
 | When | Who | Why |
 |---|---|---|
+| 2026-09-25 21:50 | Martin Surkovsky | Attribute changes to the accountable human author |
+| 2026-09-25 21:15 | Martin Surkovsky | Distinguish shared file installation from host behavior and invocation policy |
 | 2026-09-24 23:05 | Martin Surkovsky | Corrected the flag rule, since `--experimental` alone is refused, and named the tests that exist |
 | 2026-09-24 18:51 | Martin Surkovsky | Created |

@@ -40,8 +40,9 @@ unchanged; nothing is compared against the untouched upstream bytes at any
 point. Rewriting happens once, in memory, before the conflict check, not
 after it.
 
-`rewrite_skill_name` in `init.rs` requires an exact `name: <dir-name>` line
-to already be present and errors instead of guessing when it isn't — an
+`rewrite_skill_name` in `init.rs` parses closed YAML frontmatter and requires a
+single top-level name line matching the directory (plain or quoted), and errors
+instead of guessing when it isn't present — an
 upstream skill whose frontmatter disagrees with its own directory name is a
 vendor-side problem to surface, not paper over.
 
@@ -51,9 +52,19 @@ vendor-side problem to surface, not paper over.
 `experimental/<package>/skills/**` (recursively, skipping non-skill
 directories like each category's `README.md`) as
 `.claude/skills/<package>-<skill-name>/`, with the frontmatter `name:` line
-rewritten to match. `--claude` and `--experimental` share one `Report`, one
+rewritten to match. Build a complete package name map before placing files and
+refuse duplicate basenames. Rewrite references to those names in Markdown and
+YAML resources: `/name`, `$name`, and quoted names in paragraphs referring to the
+`Skill tool`. Preserve ordinary prose, local paths, unknown host commands, and
+already-prefixed names. New reference conventions need an explicit packaging
+change; unstructured prose is not treated as a dependency language. Upstream
+source remains untouched. `--claude` and `--experimental` share one `Report`, one
 `--force`, one conflict model — installing from two sources in the same run
 is one `init` call, not two.
+
+Rewriting preserves original line endings and final-newline presence. LF and CRLF
+blank lines, including whitespace-only lines, delimit the paragraphs used to scope
+quoted references; a `Skill tool` mention does not affect other paragraphs.
 
 ## Consequences
 
@@ -67,6 +78,9 @@ the list of packages that do, per the "never guessed" rule in `CLAUDE.md`.
 
 ## Verification
 
+`experimental_skill_dependencies_use_the_installed_namespace` verifies that
+installed workflows name the dependencies actually installed for both hosts.
+`docs/cases/packaging.md` specifies the reference boundary. Existing checks include
 `init_experimental_installs_a_vendored_package_prefixed`,
 `init_experimental_is_idempotent_on_a_second_run`,
 `init_experimental_unknown_package_names_what_is_available`,
@@ -80,5 +94,8 @@ rather than guessing on an absent line or non-UTF-8 input.
 
 | When | Who | Why |
 |---|---|---|
+| 2026-09-25 21:50 | Martin Surkovsky | Attribute changes to the accountable human author |
+| 2026-09-25 21:38 | Martin Surkovsky | Preserve CRLF content and paragraph boundaries during packaging |
+| 2026-09-25 21:15 | Martin Surkovsky | Preserve dependency resolution when package skill names are prefixed |
 | 2026-09-24 23:13 | Martin Surkovsky | Listed the tests added for behaviours that mutation testing showed nothing pinned |
 | 2026-09-24 18:28 | Martin Surkovsky | Created |

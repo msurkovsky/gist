@@ -19,7 +19,8 @@ These rules exist so the agent never has to guess.
 | `2`  | called wrong — bad flags, unparseable input (clap returns this) |
 
 A run that completed but left something refused, such as an `init` conflict or a
-`hook install` that found a hook that is not gk's, still prints its whole report
+`hook install` that found a hook that is not gk's, or a `check` report with validation
+failures, still prints its report
 with `"status":"ok"` on stdout and exits `1`. The report says what; the exit code
 says look before continuing.
 
@@ -38,6 +39,9 @@ says look before continuing.
 - Deterministic ordering. Sort explicitly — hash iteration order is not an order.
 
 ## Adding a subcommand
+
+Follow the approved-prose workflow in `CONTRIBUTING.md`. Add behavior cases under
+`docs/cases/` and reference them from the tests that exercise the changed boundary.
 
 1. Add a variant to `Command` in `crates/gist-cli/src/main.rs`.
 2. Define a `#[derive(Debug, Serialize)]` result type and `impl Human` for it.

@@ -77,14 +77,19 @@ depends on that.
 
 ## Verification
 
-`scripts/check.sh` fails when `scripts/vendor.sh check` finds a non-merge
-first-parent commit touching `experimental/`. `just vendor update` on an
+`scripts/check.sh` and `scripts/vendor.sh check` use `gk check` to compare each
+vendor's current subtree with its recorded import's second parent and to detect
+staged, unstaged, and non-ignored untracked changes. Normal PR merges do not hide
+local edits. Full history is required; see ADR 0012. `just vendor update` on an
 unchanged upstream reports `up to date` and creates no commit.
 
 ## Changelog
 
 | When | Who | Why |
 |---|---|---|
+| 2026-09-25 21:50 | Martin Surkovsky | Attribute changes to the accountable human author |
+| 2026-09-25 21:38 | Martin Surkovsky | Exclude ignored local artifacts while still checking tracked vendor files |
+| 2026-09-25 21:15 | Martin Surkovsky | Check imported content across merges instead of relying on first-parent history |
 | 2026-09-25 19:00 | Martin Surkovsky | Stated what views are for now that `gk init --experimental` exists, instead of a header note |
 | 2026-09-25 07:19 | Martin Surkovsky | Noted that `gk init --experimental` (ADR 0005) made a view no longer the only way to try a vendored skill |
 | 2026-09-24 18:15 | Martin Surkovsky | Created |

@@ -2,7 +2,7 @@
 
 Language-agnostic rules for code that will be reviewed. Project-specific conventions
 (test file naming, formatter, commit types, base branch) live in the project's own
-`CLAUDE.md` or `.claude/rules/`, not here.
+agent instructions (`AGENTS.md`, `CLAUDE.md`, or host-specific rules), not here.
 
 ## Comments
 
@@ -24,7 +24,7 @@ Language-agnostic rules for code that will be reviewed. Project-specific convent
 
 ## Before finishing
 
-1. Typecheck, lint, tests, with the commands the project's `CLAUDE.md` names. None named: say so, do not guess or skip silently.
+1. Typecheck, lint, tests, with the commands the project's agent instructions name. None named: say so, do not guess or skip silently.
 2. Re-read the project's rule files for anything new you touched: test file names, imports, signals.
 3. After any rebase: re-install dependencies, rebuild generated code, rerun everything. A green run against a stale client is not green.
 

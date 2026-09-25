@@ -15,10 +15,10 @@ It is not for you.
 This governs this repo. It is not a position on AI in general, not advice for
 anyone else's project, and not a claim that the trade-offs here transfer.
 
-It is the root. `CLAUDE.md`, `rules/`, the skills, and the hooks derive from
-it: this file says why, `CLAUDE.md` and `rules/` say what, hooks hold what
-cannot be allowed to slip, as a gate or as a reminder. Where they disagree, the
-lower one is wrong.
+It is the root. `AGENTS.md`, `CLAUDE.md`, `rules/`, the skills, and the hooks
+derive from it: this file says why, agent instructions and rules say what,
+hooks hold what cannot be allowed to slip, as a gate or as a reminder. Where
+they disagree, the lower one is wrong.
 
 It describes the repo as it is meant to be, and the repo is held to it. Where
 the repo falls short, `TODO.md` names the gap; the gap is a defect in the repo,

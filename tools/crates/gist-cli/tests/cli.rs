@@ -367,30 +367,36 @@ fn human_output_is_not_json_and_still_exits_zero() {
 
 #[test]
 fn outline_reports_the_shape_of_a_tree() {
+    // Case: docs/cases/gist-outline.md#outline-shape
     let repo = Repo::new();
-    repo.write("src/a.ts", BASE_TS);
-    repo.write("src/b.rs", "fn main() {}\n");
+    repo.write("src/a.rs", "fn a() {}\n");
+    repo.write("src/b.rs", "fn b() {}\n");
+    repo.write("README.md", "# Guide\n");
 
     let data = repo.data(&["outline", "."]);
-    assert_eq!(data["files"], 2, "the .git directory is not walked");
+    assert_eq!(data["files"], 3, "the .git directory is not walked");
+    assert_eq!(data["bytes"], 28);
+    assert_eq!(data["file_types"][0]["files"], 2);
+    assert_eq!(data["file_types"][0]["bytes"], 20);
     let extensions: Vec<&str> = data["file_types"]
         .as_array()
         .expect("file_types")
         .iter()
         .map(|entry| entry["extension"].as_str().expect("extension"))
         .collect();
-    assert!(extensions.contains(&"ts") && extensions.contains(&"rs"));
+    assert_eq!(extensions, ["rs", "md"]);
 }
 
 #[test]
 fn limit_truncates_and_says_so() {
+    // Case: docs/cases/gist-outline.md#outline-shape
     let repo = Repo::new();
     repo.write("a.ts", "const a = 1;\n");
     repo.write("b.rs", "fn b() {}\n");
     repo.write("c.py", "c = 1\n");
 
-    let data = repo.data(&["outline", ".", "--limit", "2"]);
-    assert_eq!(data["file_types"].as_array().expect("types").len(), 2);
+    let data = repo.data(&["outline", ".", "--limit", "1"]);
+    assert_eq!(data["file_types"].as_array().expect("types").len(), 1);
     assert_eq!(data["truncated"], true);
 }
 
@@ -638,6 +644,36 @@ fn init_experimental_installs_a_vendored_package_prefixed() {
 
     // Nothing lands unprefixed, and no bare `.claude/skills/tdd/` appears.
     assert!(!repo.path().join(".claude/skills/tdd").exists());
+}
+
+// Case: docs/cases/packaging.md#package-references
+#[test]
+fn experimental_skill_dependencies_use_the_installed_namespace() {
+    let repo = Repo::new();
+    repo.data(&["init", "--claude", "--codex", "--experimental=mattpocock"]);
+    for root in [".claude/skills", ".agents/skills"] {
+        let tdd = std::fs::read_to_string(repo.path().join(root).join("mattpocock-tdd/SKILL.md"))
+            .unwrap();
+        assert!(
+            tdd.contains("\"mattpocock-codebase-design\""),
+            "dependency still has its upstream name"
+        );
+        let grill = std::fs::read_to_string(
+            repo.path()
+                .join(root)
+                .join("mattpocock-grill-with-docs/SKILL.md"),
+        )
+        .unwrap();
+        assert!(grill.contains("\"mattpocock-grilling\""));
+        assert!(grill.contains("\"mattpocock-domain-modeling\""));
+        let review = std::fs::read_to_string(
+            repo.path()
+                .join(root)
+                .join("mattpocock-code-review/SKILL.md"),
+        )
+        .unwrap();
+        assert!(review.contains("/mattpocock-setup-matt-pocock-skills"));
+    }
 }
 
 #[test]

@@ -1,7 +1,10 @@
 # Gist — working notes for agents
 
-Skills are the product. Tools exist to serve them. `README.md` has the layout,
-`CONTRIBUTING.md` the recipe for each kind of change, `just ci` the enforcement.
+Skills are the product. Tools exist to serve them. `MANIFESTO.md` governs this
+repo; read `docs/architecture.md` and the workflow in `CONTRIBUTING.md` before
+implementation. Apply `rules/code-and-comments.md` to code changes and
+`rules/merge-requests.md` to merge requests. `just ci` checks mechanical
+properties; human approval and behavioral evaluation are separate evidence.
 
 ## Layout
 
@@ -11,8 +14,10 @@ Skills are the product. Tools exist to serve them. `README.md` has the layout,
   vendors these into a flat `.claude/skills/`, where a generic name silently
   collides with a target repo's own skill of the same name. See
   `docs/adr/0003-prefix-vendored-skill-names.md`; `scripts/check.sh` fails on a
-  bare name. User-invoked skills carry `disable-model-invocation: true` and a
-  human-facing one-line description. Model-invoked skills carry trigger phrasing.
+  bare name. `docs/skill-contract.md` defines acceptance and host compatibility.
+  Explicit-only skills carry both `disable-model-invocation: true` and
+  `policy.allow_implicit_invocation: false` in `agents/openai.yaml`.
+  Model-invoked skills carry trigger phrasing.
 - `experimental/<vendor>/` — third-party repos vendored with full history. Never
   edit anything here. To change a vendored skill, copy it into
   `skills/gist-<name>/`, note the source in its frontmatter, then edit the copy.
@@ -70,8 +75,9 @@ Without `just`: `cargo <cmd> --manifest-path tools/Cargo.toml`, `scripts/check.s
 - Tools never prompt, never spin, never emit unbounded output.
 - Every output type implements `Human` and `Serialize`. No exceptions.
 - Test the failure path. The happy path is the easy half.
-- Skills reference other skills by telling the agent to call the Skill tool with
-  the name, not by relative file links across skill folders.
+- Skills name dependencies and ask the agent to use its host's skill mechanism.
+  Do not assume a tool named `Skill`, or link across installed skill directories.
+  See `docs/skill-contract.md`.
 - Commit subjects are plain imperative sentences, capitalised, under 50
   characters where possible, 72 hard limit, no trailing period, no
   conventional-commit prefix. Blank line, then a body wrapped at 72 that says

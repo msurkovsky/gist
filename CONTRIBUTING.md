@@ -3,6 +3,37 @@
 Recipes for every kind of change. `CLAUDE.md` holds the short list of rules; this file
 says how to do things. Run `just ci` before every commit.
 
+## Workflow and approval
+
+`MANIFESTO.md` governs this workflow. Start from `docs/architecture.md`; use
+`docs/skill-contract.md` for skills and `docs/tool-contract.md` for tooling.
+
+1. State the problem, scope, and intended outcome. Propose a plan for human
+   judgment before implementation. Existing explicit approval counts; do not
+   request the same decision again.
+2. Update the relevant design, behavior cases, and decisions. Present the prose
+   change for approval before building the changed behavior. For an unchanged
+   behavior, cite the existing case and explain why it still applies. A human's
+   explicit request to implement reviewed findings authorizes those corrections;
+   new behavior outside that scope needs a new decision.
+3. Implement the approved behavior. Exploration may precede approval, but a spike
+   is disposable evidence, not the implementation to ship.
+4. Prove every new test red, then green, following `rules/code-and-comments.md`.
+   The red run must fail on the behavior under test; a compilation error or
+   broken fixture does not count. Run `just ci` and the relevant behavior scenarios.
+5. Prepare a review map: changed module or skill, source section/case, verification
+   result, and remaining uncertainty. Until automated coherence checks exist, list
+   these pairs in the review handoff. Have a human or a separate agent context
+   inspect them against the original problem. An implementer's self-review is
+   useful but does not satisfy independent review; label it pending if unavailable.
+6. The human weighs that evidence before merge. Resolve findings, update lasting
+   docs, and remove completed plan entries from `TODO.md`. Keep evidence in the
+   review record; keep enduring behavior and cases in the tree.
+
+For small changes the plan and prose review can share one short exchange, provided
+both decisions are explicit. Mechanical checks cannot establish human approval,
+requirement correctness, or a skill's decision quality.
+
 ## Where things go
 
 | Change | Location | Owner of the file |
@@ -26,14 +57,21 @@ says how to do things. Run `just ci` before every commit.
    ---
    ```
 2. Keep it language-agnostic. A skill that needs checks run points at the commands the
-   project's `CLAUDE.md` names; it never names a compiler or test runner itself.
-3. Reference other skills with `Call the Skill tool with "gist-<name>"`. No relative links
-   into other skill folders. A user-invoked skill cannot be called this way; tell the user
-   to run it.
+   project's agent instructions name; it never names a compiler or test runner itself.
+3. Name dependencies with `Use the gist-<name> skill through the host's skill mechanism`.
+   No relative links into other skill folders. For an explicit-only dependency, ask the
+   user to invoke it. Declare missing-dependency behavior instead of guessing.
+   For explicit-only skills also add `policy.allow_implicit_invocation: false` to
+   `agents/openai.yaml`; the frontmatter flag alone does not cover Codex.
 4. Write steps as imperatives. One idea per line. Say `unsupported` or `stop` where the
    skill must not guess. No praise, no filler, no summaries of what was just said.
 5. Add a row to the **Skills** table in `README.md`.
-6. Rebuild and reinstall `gk` (`just install`); skills are embedded at compile time.
+6. Add cases and evaluation evidence under `docs/cases/`, using
+   `docs/skill-contract.md`. Exercise trigger, non-trigger, and missing-prerequisite
+   scenarios. Record which host was evaluated and what remains untested.
+7. Run `just ci`; it rebuilds the embedded skills for the tests. Install a new binary
+   or project skills only when that installation is requested. Packaging tests use
+   temporary directories and do not change a working project's setup.
 
 ## Adopt a skill from `experimental/`
 
@@ -110,6 +148,6 @@ Prefer a hook over a rule whenever the rule has already been broken more than on
 ## Writing style inside skills and rules
 
 - Imperative mood, present tense, second person implied.
-- Name the tool, not the vibe: `Call the Skill tool with "gist-doc-review"`, not "check
-  the comments".
+- Name the capability: `Use the gist-doc-review skill through the host's skill
+  mechanism`. Do not assume a host-specific tool; see `docs/skill-contract.md`.
 - Prefer a stop condition over a caveat: `unsupported`, `stop`, `ask once`.

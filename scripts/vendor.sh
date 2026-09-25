@@ -8,9 +8,9 @@
 #   scripts/vendor.sh add <name> <url> [branch]   register and import
 #   scripts/vendor.sh update [name...]            re-import registered vendors (default: all)
 #   scripts/vendor.sh list                        show registry with the imported upstream SHA
-#   scripts/vendor.sh check                       list commits that touched experimental/ outside imports
+#   scripts/vendor.sh check                       compare vendor content with recorded imports
 #
-# Registry: scripts/vendors.conf, one "name url branch" per line.
+# Registry: scripts/vendors.conf, one "name url [branch]" per line; branch defaults to main.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -87,11 +87,7 @@ cmd_list() {
 }
 
 cmd_check() {
-  # A non-merge commit touching experimental/ is a local edit of vendored content, which
-  # will conflict on the next update. Adopt into skills/ instead. Upstream commits arrive
-  # through the import merge's second parent and only first-parent history holds commits
-  # made in this repo, so first-parent, non-merge is the only place a local edit can hide.
-  git log --first-parent --no-merges --format='%h %s' -- experimental/ | grep . || echo "clean: no local edits under experimental/"
+  cargo run --quiet --locked --manifest-path "$ROOT/tools/Cargo.toml" --bin gk -- check "$ROOT" --vendors-only
 }
 
 case "${1:-}" in

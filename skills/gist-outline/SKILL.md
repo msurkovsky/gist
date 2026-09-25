@@ -1,11 +1,11 @@
 ---
 name: gist-outline
-description: Summarize the shape of a codebase — file counts, dominant languages, where the weight sits. Use when orienting in an unfamiliar repo, before planning work, or when asked "what is this project" or "what am I looking at".
+description: Summarize a codebase's file counts, dominant languages, and size when asked for an overview or when unfamiliar-tree orientation helps the requested work.
 ---
 
 # Outline
 
-Get the shape of a tree before reading anything in it.
+Use a tree summary when it helps orient the requested work.
 
 ## Usage
 
@@ -14,6 +14,8 @@ gk outline <path> --json
 ```
 
 Options: `--limit N` caps reported file types, `--all` includes gitignored files.
+If `gk` is unavailable or the command fails, report the missing prerequisite or
+error. Do not invent counts or install tools without an installation request.
 
 ## Reading the result
 
@@ -23,5 +25,7 @@ Options: `--limit N` caps reported file types, `--all` includes gitignored files
 
 ## What to do with it
 
-Report the shape, then ask what altitude is wanted. Do not open files yet.
-The point is to know what kind of repo this is before spending context on it.
+Report the shape. Continue with the user's requested inspection when it is clear;
+ask for the desired level of detail only when it would change the next step.
+File types and sizes do not establish module responsibilities; inspect the
+relevant files before making architectural claims.
