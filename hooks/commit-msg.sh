@@ -27,6 +27,9 @@ case "$subject" in
 esac
 
 err() { echo "commit-msg: $*" >&2; exit 1; }
+# Characters, not bytes, in any locale: a byte locale counts an em-dash as three, so drop
+# the UTF-8 continuation bytes (0x80-0xBF) before counting.
+len() { printf '%s' "$1" | LC_ALL=C tr -d '\200-\277' | wc -c | tr -d ' '; }
 cfg() { git config --get "$1" 2>/dev/null || echo "$2"; }
 
 subject_max="$(cfg commit.subjectMax 72)"
@@ -40,18 +43,20 @@ if [ -z "$pattern" ]; then
   [[ "$subject" =~ ^[A-Z] ]] || err "subject must start with an uppercase letter: $subject"
 fi
 [[ "$subject" != *. ]] || err "subject must not end with a period: $subject"
-[ "${#subject}" -le "$subject_max" ] || err "subject is ${#subject} chars, max $subject_max: $subject"
-[ "${#subject}" -le 50 ] || echo "commit-msg: note: subject is ${#subject} chars; under 50 reads better" >&2
+subject_len="$(len "$subject")"
+[ "$subject_len" -le "$subject_max" ] || err "subject is $subject_len chars, max $subject_max: $subject"
+[ "$subject_len" -le 50 ] || echo "commit-msg: note: subject is $subject_len chars; under 50 reads better" >&2
 
 if [ "${#lines[@]}" -gt 1 ]; then
   [ -z "${lines[1]}" ] || err "line 2 must be blank (subject, blank line, body)"
   for ((i = 2; i < ${#lines[@]}; i++)); do
     l="${lines[$i]}"
-    [ "${#l}" -le "$body_max" ] && continue
+    n="$(len "$l")"
+    [ "$n" -le "$body_max" ] && continue
     [[ "$l" =~ https?:// ]] && continue            # URLs
     [[ "$l" =~ ^[A-Za-z-]+:\  ]] && continue        # trailers like Co-Authored-By:
     [[ "$l" =~ ^[[:space:]] ]] && continue          # indented code or quotes
-    err "body line $((i + 1)) is ${#l} chars, max $body_max"
+    err "body line $((i + 1)) is $n chars, max $body_max"
   done
 fi
 
