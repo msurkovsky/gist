@@ -33,7 +33,8 @@ not break, `just ci` the enforcement of both.
 | `gist-outline` | the shape of a codebase — file counts, dominant languages, where the weight sits. Orienting in an unfamiliar repo |
 | `gist-doc-review` | the comments and doc strings in a change — cut what restates the code, shorten the bloated, add the missing line on public API |
 
-Both also run when the model sees a request that matches their description.
+Both run when the model sees a request that matches their description, or on demand as
+`/gist-outline` and `/gist-doc-review`.
 
 For the rest of a change's life, use the vendored `mattpocock` skills, installed with
 `gk init --claude --experimental=mattpocock`: `/mattpocock-code-review` before opening an

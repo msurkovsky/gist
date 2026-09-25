@@ -6,7 +6,7 @@ Accepted — 2026-09-25.
 
 The commit-msg hook is installed by symlink:
 `ln -sf <gist checkout>/hooks/commit-msg.sh .git/hooks/commit-msg`. That line is
-in `README.md`, `CONTRIBUTING.md`, `CLAUDE.md`, and the `gist-mr-start` skill.
+in `README.md`, `CONTRIBUTING.md`, and `CLAUDE.md`.
 Four things are wrong with it.
 
 - It needs a gist checkout at a known path on the machine, the same premise
@@ -71,11 +71,10 @@ few lines of generated POSIX `sh` that calls `gk`.
 
 **`gk hook commit-msg <file>`** is the hook, ported rule for rule from the shell
 version: subject and body checks, `commit.subjectMax`, `commit.bodyMax`,
-`mr.commitPattern`, `branch.<name>.mrType`, exempt Merge/fixup!/squash!/Revert. One deliberate
+`mr.commitPattern`, exempt Merge/fixup!/squash!/Revert. One deliberate
 difference: "uppercase" means Unicode uppercase, so `Šablona` passes. The shell's
-`[A-Z]` meant whatever the locale's collation said. It reads config and the
-current branch by running `git config` and `git symbolic-ref`, not libgit2 (see
-Options). Exit 0 accepts, exit 1 rejects with the rule on stderr. Advice on an
+`[A-Z]` meant whatever the locale's collation said. It reads config by running
+`git config`, not libgit2 (see Options). Exit 0 accepts, exit 1 rejects with the rule on stderr. Advice on an
 accepted message, such as the subject-length note, also goes to stderr, as it did
 in the shell version, and stdout stays empty. It is a public subcommand, so a
 hook manager can call it directly.
@@ -132,9 +131,7 @@ the forwarder those repos keep working, and fail loudly if `gk` is absent.
 `TODO.md` tracks removing it once they have re-run `gk hook install --force`.
 
 **Out of scope.** Claude Code hooks need a `settings.json` edit, which `init`
-does not do and this does not either; `post-rebase-nag.sh` stays as it is. Porting
-it to `gk hook post-rebase-nag` would drop its `node` dependency and is a
-separate decision. `languages/` is unrelated to this.
+does not do and this does not either.
 
 ## Consequences
 
@@ -151,14 +148,13 @@ or `gk hook install --uninstall` gets out. Rule changes reach a repo only after
 dependency. Two differences matter. Alternation is leftmost-first where ERE is
 leftmost-longest: with `^(feat|feature)` the type captured from `feature: x` is
 `feat` here and was `feature`, so write the longer alternative first. And
-backreferences do not compile. The pattern in `gist-mr-start`
-(`^([a-z]+)\(([A-Za-z]+-?[0-9]+)\): .+`) behaves the same in both. A pattern
+backreferences do not compile. A typical typed pattern,
+`^([a-z]+)\(([A-Za-z]+-?[0-9]+)\): .+`, behaves the same in both. A pattern
 that does not compile fails the hook with the compiler's message, not silently.
 
 The bash-only property of `hooks/` goes. `CLAUDE.md` says hooks target repos
-without `gk` on PATH and needs rewording. `README.md`, `CONTRIBUTING.md`,
-`CLAUDE.md`, and `skills/gist-mr-start/SKILL.md` swap the `ln -sf` line for
-`gk hook install`. The commit-msg smoke lines in `scripts/check.sh` move to
+without `gk` on PATH and needs rewording. `README.md`, `CONTRIBUTING.md`, and
+`CLAUDE.md` swap the `ln -sf` line for `gk hook install`. The commit-msg smoke lines in `scripts/check.sh` move to
 `tests/cli.rs`. The macOS `len()` item in `TODO.md` goes away, since Rust counts
 characters. Windows was not considered; mode bits are ignored there and Git for
 Windows ships `sh`, so the shim probably works.
@@ -176,9 +172,8 @@ six, the ones that check nothing valid is rejected, passed as expected.
   non-ASCII capital; ignores comment lines; exempts long URL, trailer and
   indented lines, and Merge/fixup!/squash!/Revert; counts characters, not
   bytes; notes a subject over 50; honours `commit.subjectMax` and
-  `commit.bodyMax`; enforces `mr.commitPattern` and one type per branch, on an
-  unborn branch too; fails loudly on a limit that is not a number, on a pattern
-  that does not compile, and on a message file it cannot read; speaks the JSON
+  `commit.bodyMax`; enforces `mr.commitPattern`; fails loudly on a limit that
+  is not a number, on a pattern that does not compile, and on a message file it cannot read; speaks the JSON
   envelope.
 - Config is read the way git reads it: `git -c commit.subjectMax=10 commit`
   reaches the hook; a `GIT_CONFIG_GLOBAL` file that sets `core.hooksPath` makes

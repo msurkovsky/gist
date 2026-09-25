@@ -147,8 +147,8 @@ fn git(args: &[&str]) -> Result<GitOutput, String> {
     })
 }
 
-/// A lookup where exit status 1 means "not set", as for `git config --get`
-/// and `git symbolic-ref -q`. Any other failure is an error.
+/// A lookup where exit status 1 means "not set", as for `git config --get`.
+/// Any other failure is an error.
 fn lookup(args: &[&str]) -> Result<Option<String>, String> {
     let output = git(args)?;
     match output.code {

@@ -1,6 +1,6 @@
 # 11. Drop the MR workflow skills
 
-Accepted — 2026-09-25. Supersedes the per-branch type in `docs/adr/0009`.
+Accepted — 2026-09-25.
 
 ## Context
 
