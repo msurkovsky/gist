@@ -74,7 +74,13 @@ place where the repo does not follow it yet.
   three share one page. Diagram notation undecided; it must diff.
 - Principle 5 says test cases are prose the human approves and every test names
   its case. No test cases exist. `tests/cli.rs` names describe behaviour but
-  link to nothing. Decide the format and the link, then backfill.
+  link to nothing. Decide the format and the link, then backfill. Once the
+  format exists, add one short worked example (problem, case, test name) that
+  the manifesto can point readers at; it has none, and newcomers ask for one.
+- Principle 5 says the coherence check holds each test against the case it
+  names; a name alone is a claim. No skill does this. Build it as part of the
+  coherence-check skill below: `gk` pairs each test with its named case, the
+  skill judges whether the test exercises what the case says.
 - Principle 3 says review is human-driven with a tool that answers "is this code
   aligned with that section" and "show me what changed in the docs". No such
   skill. The deterministic half — which prose sources which changed file, the

@@ -26,10 +26,9 @@ not a loosening of this document.
 
 One folder is exempt. `experimental/` holds third-party skills vendored to be
 tried, and trying needs room to not yet know. Nothing there owes an ADR, a
-rule, or a test. The debt comes due at adoption: an adopted skill ships with
-`gk init` and enters the regime below in full. The exemption is itself written
-down — `CLAUDE.md` says what the folder is for and how things leave it,
-`docs/adr/0004` says why it is built the way it is.
+rule, or a test. The debt comes due at adoption: an adopted skill enters the
+regime below in full. The exemption is itself written down, like any other
+decision.
 
 The shape is borrowed from the Rust project's LLM policy, which also governs one
 repository and refuses to speak for a wider community. The conclusions differ:
@@ -47,21 +46,24 @@ Ask instead what the text is for, and who has to trust it.
 
 ## 2. Prose is the source. Code is the build.
 
-Before compilers, people read the assembly. Then the compiler earned a spec,
-determinism, and millions of users a day, and almost nobody reads object code
-now — not because it is long, because trust was delegated to a translator that
-earned it.
+Nobody trusts a building because they watched every brick laid. Crews differ.
+Give two of them the same drawings and they put up two buildings that differ in
+a hundred small ways. The owner trusts the result anyway, for three reasons:
+drawings that say what must stand, codes that bound how it may be built, and
+inspections at the stages where a fault would otherwise be buried.
 
-The model is the next translator. Its source is prose in a natural language:
-the architecture, the design, the test cases, the decisions. Its output is
-code. The prose is the spec a compiler had; the test cases are its conformance
-suite. What the model lacks is determinism, and that is the gap the human gates
-and the coherence check below exist to close. So the delegation is not
-automatic. It is bought, not declared — bought with tests derived from the
-source, and with types, lints, and invariants at the boundaries around them.
+The model is the crew. Its drawings are prose in a natural language: the
+architecture, the design, the test cases, the decisions. Its output is code.
+The test cases are the inspection checklist and the tests carry it out; types,
+lints, and invariants at the boundaries are the building codes. No two runs
+build the same code, and none has to. Each run has to conform.
 
-We are where 1970 was with assembly. People still read the output. Less each
-year, and only where they choose to.
+So trust is not borrowed from a determinism the model does not have. It is
+bought, not declared — bought with verification against the source, at the
+human gates and in the coherence check below.
+
+People still read the output, and should wherever they choose to. The claim is
+only that watching every brick is not how the building earns trust.
 
 ## 3. Review moves up
 
@@ -74,6 +76,11 @@ it. The plan becomes a change to the docs — architecture, design, test cases,
 decisions — and a human reads that change: what it said before, what it says
 now, whether it makes sense. Only then is code written, and the checks run
 against it: the tooling, and a coherence check.
+
+Fixed order does not mean the plan comes from nowhere. Code may be written to
+find out what the plan should say — a spike, a prototype, a debugging session.
+That code is a question, not the answer: it is thrown away, and what it taught
+enters as a plan like any other.
 
 The model may draft the prose. That is fine, and it is the point: prose is the
 altitude a human can still read at model speed, code is not. The gate is the
@@ -126,26 +133,25 @@ When a probe catches something, the area it caught it in is declared.
 If lines are not the review target, something has to make "does what I intend"
 checkable. That is the test cases: prose, one behaviour each, at the boundaries
 that matter, approved by the human at the docs gate. The tests are their build.
-The model writes them, and each names the case it implements.
+The model writes them, and each names the case it implements. A name is a
+claim, not a proof: the coherence check holds each test against the case it
+names, the same way it holds code against design.
 
 This is where the bar cannot slip, and it can slip at either layer. Slop cases
 produce a green pipeline that vouches for nothing, silently; the only guard for
 a case is the human who reads it at the docs gate, and that is what the gate
 is for. Slop tests do the same one level down, and there the guard is
-`rules/code-and-comments.md`: a test that passes with the guarded line deleted
-is not a test, and every new test is proven red at least once.
+mechanical: a test that passes with the guarded line deleted is not a test, and
+every new test is proven red at least once.
 
-The cutoff is the one that rule sets for comments, where a clear private
-helper gets nothing. Public behaviour and boundaries get cases. A clear
-private helper gets none.
+Public behaviour and boundaries get cases. A clear private helper gets none.
 
 ## 6. No hidden knowledge
 
 The bare minimum for participation is not the code. It is the architecture, the
-decisions, and the trade-offs, and those live beside the code. In it they are
-rarely recorded and seldom surfaced. Some projects record them well. Where they
-are not recorded, they move by conversation instead, which is most of what
-onboarding actually is.
+decisions, and the trade-offs. They belong beside the code, and in most
+projects they are not there. Where they are not written down, they move by
+conversation instead, which is most of what onboarding actually is.
 
 Conversation is the channel this repo refuses to depend on. It does not scale
 past the people in the room, and it leaves nothing an agent can read. An answer
@@ -155,8 +161,8 @@ again, and what it was derived from is in the tree. An answer from a head is.
 What makes tribal knowledge tribal is negative space. How it works is readable.
 What is not readable: why not the obvious alternative, what was tried and
 failed, what this must never do. Code records the decision it embodies and
-seldom surfaces the ones it rejected. Hence the rule for `docs/adr/`: add one
-when the rejected options were real.
+seldom surfaces the ones it rejected. Hence decision records: one for each
+decision whose rejected options were real.
 
 The source has altitudes. Conceptual: the system and its parts, as a diagram
 kept as text so it diffs and a tool can read it. Architecture: the shape and
@@ -185,13 +191,16 @@ The third needs a criterion. Refinement adds how; it never adds what. Code that
 does something no case and no design line asks for is drift, or a decision
 nobody made. Drift is rebuilt from the prose. A missing decision goes back
 through the docs gate, late but through it. Either way the prose is where it
-ends up written. A defect that reaches main is the same event found late: the
-case that would have caught it was never written. The remedy is never more
-reading; a probe is still yours to take.
+ends up written.
+
+A defect that reaches main is not a fourth detector. It is the third, firing
+late: prose and code disagreed, and the case that would have shown it was never
+written. The remedy is the missing case, never more reading; a probe is still
+yours to take.
 
 Each one is a leak with a location. Write the artifact, not the reply. A
-constraint that leaks twice graduates — to a rule, then to a hook, the same
-escalation `CLAUDE.md` applies to rules. A fact that leaks stays an artifact;
+constraint that leaks twice graduates — to a rule, then to a hook. A fact that
+leaks stays an artifact;
 it just has to be reachable, which is principle 8.
 
 The agent is therefore the onboarding test. Human onboarding is rare, the
@@ -210,19 +219,18 @@ Once, at its altitude. Architecture to design to test cases to tests to code is
 refinement, not repetition: each level says one thing the level above did not.
 Two hundred ADRs nobody can hold are hidden knowledge again, hidden by volume.
 
-And reachable at the decision. `docs/` is storage; retrieval is what makes it
-knowledge. `CLAUDE.md` points from each rule to the decision behind it and loads
-every session. `README.md` points from the layout. A module's doc comment
-points at the section that sources it — `init.rs` already does this for its
-ADRs, and the coherence check is meant to walk the same links to know which
-prose to hold which code against. A skill surfaces a decision at the step where
-it applies and keeps its own long material in `references/`, loaded on demand
-and not before. A decision no pointer reaches is tribal knowledge with extra
-steps.
+And reachable at the decision. Documentation is storage; retrieval is what
+makes it knowledge. Each rule points at the decision behind it, from a place
+that is loaded when the rule applies. The layout points at the parts. Each
+module points at the prose that sources it, and the coherence check walks the
+same links to know which prose to hold which code against. A skill surfaces a
+decision at the step where it applies and loads its long material on demand,
+not before. A decision no pointer reaches is tribal knowledge with extra steps.
 
 ## What participation means
 
-Four things, in the order the work runs:
+Four things, in the order the work runs. None of them is writing code; that is
+the model's part.
 
 - state a problem so it survives contact with an implementer
 - judge a plan, and catch the wrong decomposition before it is built
