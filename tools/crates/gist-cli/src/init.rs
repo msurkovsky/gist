@@ -226,10 +226,18 @@ impl TryFrom<String> for ManifestPath {
     type Error = String;
 
     fn try_from(path: String) -> Result<Self, String> {
+        let components = Path::new(&path).components();
+        // `components` folds away `.`, `//` and a trailing slash, so the
+        // spelling has to match its normal form or two strings name one file.
         let plain = !path.is_empty()
-            && Path::new(&path)
-                .components()
-                .all(|component| matches!(component, Component::Normal(_)));
+            && components
+                .clone()
+                .all(|component| matches!(component, Component::Normal(_)))
+            && components
+                .map(|component| component.as_os_str().to_string_lossy())
+                .collect::<Vec<_>>()
+                .join("/")
+                == path;
         if plain {
             Ok(Self(path))
         } else {
@@ -303,41 +311,30 @@ pub fn run(args: Args) -> Result<Report, String> {
 
     let items = collect_items(&args.experimental)?;
 
-    let mut totals = Totals::default();
-    let mut targets = Vec::with_capacity(roots.len());
+    // Every refusal comes before the first write, across all roots, so a
+    // refused run leaves nothing behind.
+    let prepared = roots
+        .iter()
+        .map(|root| prepare_root(root, &items))
+        .collect::<Result<Vec<_>, String>>()?;
 
-    for root in roots {
+    let mut totals = Totals::default();
+    let mut targets = Vec::with_capacity(prepared.len());
+
+    for PreparedRoot {
+        root,
+        mut manifest_entries,
+    } in prepared
+    {
         let root_path = Path::new(root);
         let mut target_totals = Totals::default();
         let mut skills = Vec::with_capacity(items.len());
-        let manifest_path = root_path.join(MANIFEST_FILENAME);
-        refuse_symlink(root_path, Path::new(MANIFEST_FILENAME))?;
-        let mut manifest_entries: BTreeMap<ManifestPath, String> =
-            match read_manifest(&manifest_path)? {
-                ManifestRead::Absent => BTreeMap::new(),
-                ManifestRead::Found(manifest) => manifest
-                    .files
-                    .into_iter()
-                    .map(|entry| (entry.path, entry.sha256))
-                    .collect(),
-                // Rebuilding over it would drop tracking of every file outside
-                // this run's selection without a word.
-                ManifestRead::Corrupt(reason) | ManifestRead::Rejected(reason) => {
-                    return Err(format!(
-                        "{} is not a valid manifest ({reason}) — delete it to start \
-                     tracking afresh; files an earlier run placed will no longer \
-                     be tracked",
-                        manifest_path.display()
-                    ))
-                }
-            };
 
         let placing = (|| -> Result<(), String> {
             for item in &items {
                 let mut file_reports = Vec::with_capacity(item.files.len());
                 for file in &item.files {
                     let target = root_path.join(&file.path);
-                    refuse_symlink(root_path, &file.path)?;
                     let status = place(&target, &file.contents, args.force)?;
                     totals.record(status);
                     target_totals.record(status);
@@ -363,10 +360,8 @@ pub fn run(args: Args) -> Result<Report, String> {
 
         // Written even when placing failed partway: the files already on
         // disk are gk's, and an untracked file is one `--uninstall` can
-        // never remove. The placing error is the one worth reporting.
-        let written = write_manifest(root_path, manifest_entries);
-        placing?;
-        written?;
+        // never remove.
+        combine(placing, write_manifest(root_path, manifest_entries))?;
 
         targets.push(TargetReport {
             target: root.to_string(),
@@ -378,45 +373,103 @@ pub fn run(args: Args) -> Result<Report, String> {
     Ok(Report::Install(InstallReport { totals, targets }))
 }
 
+/// One target root, checked and ready to be written to.
+struct PreparedRoot<'a> {
+    root: &'a str,
+    manifest_entries: BTreeMap<ManifestPath, String>,
+}
+
+/// Everything that could refuse an install into `root`, decided before any
+/// write. Touches nothing on disk.
+fn prepare_root<'a>(root: &'a str, items: &[SkillItem]) -> Result<PreparedRoot<'a>, String> {
+    let root_path = Path::new(root);
+    refuse_symlink(Path::new("."), root_path)?;
+    let manifest_path = root_path.join(MANIFEST_FILENAME);
+    refuse_symlink(root_path, Path::new(MANIFEST_FILENAME))?;
+    let manifest_entries = match read_manifest(&manifest_path)? {
+        ManifestRead::Absent => BTreeMap::new(),
+        ManifestRead::Found(manifest) => manifest
+            .files
+            .into_iter()
+            .map(|entry| (entry.path, entry.sha256))
+            .collect(),
+        // Rebuilding over it would drop tracking of every file outside
+        // this run's selection without a word.
+        ManifestRead::Corrupt(reason) | ManifestRead::Rejected(reason) => {
+            return Err(format!(
+                "{} is not a valid manifest ({reason}) — delete it to start \
+                 tracking afresh; files an earlier run placed will no longer \
+                 be tracked",
+                manifest_path.display()
+            ))
+        }
+    };
+    for item in items {
+        for file in &item.files {
+            refuse_symlink(root_path, &file.path)?;
+        }
+    }
+    Ok(PreparedRoot {
+        root,
+        manifest_entries,
+    })
+}
+
+/// The recorded files to remove from `root`, sorted, or `None` when there is
+/// no usable manifest. Parsed but invalid is an error: silence reads as
+/// success. Touches nothing on disk.
+fn plan_uninstall(root: &str) -> Result<Option<Vec<ManifestEntry>>, String> {
+    let root_path = Path::new(root);
+    refuse_symlink(Path::new("."), root_path)?;
+    let manifest_path = root_path.join(MANIFEST_FILENAME);
+    refuse_symlink(root_path, Path::new(MANIFEST_FILENAME))?;
+
+    let manifest = match read_manifest(&manifest_path)? {
+        ManifestRead::Found(manifest) => manifest,
+        ManifestRead::Rejected(reason) => {
+            return Err(format!(
+                "{} is not a valid manifest ({reason}) — nothing was removed",
+                manifest_path.display()
+            ))
+        }
+        ManifestRead::Absent | ManifestRead::Corrupt(_) => return Ok(None),
+    };
+
+    let mut entries = manifest.files;
+    entries.sort_by(|a, b| a.path.cmp(&b.path));
+    for entry in &entries {
+        refuse_symlink(root_path, entry.path.as_path())?;
+    }
+    Ok(Some(entries))
+}
+
 /// Remove, from each target root, whatever that root's manifest says a prior
 /// install placed there. Never consults the embedded `SKILLS`/`EXPERIMENTAL`
 /// trees — the manifest is the only source of truth for what to remove.
 fn run_uninstall(roots: &[&str], force: bool) -> Result<UninstallReport, String> {
-    let mut totals = UninstallTotals::default();
-    let mut targets = Vec::with_capacity(roots.len());
+    // Every refusal comes before the first removal, across all roots.
+    let plans = roots
+        .iter()
+        .map(|root| plan_uninstall(root).map(|entries| (*root, entries)))
+        .collect::<Result<Vec<_>, String>>()?;
 
-    for root in roots {
+    let mut totals = UninstallTotals::default();
+    let mut targets = Vec::with_capacity(plans.len());
+
+    for (root, entries) in plans {
         let root_path = Path::new(root);
         let manifest_path = root_path.join(MANIFEST_FILENAME);
-        refuse_symlink(root_path, Path::new(MANIFEST_FILENAME))?;
 
         // Missing or corrupt means nothing to do, so a second `--uninstall` is
-        // not a failure. Parsed but invalid is an error: silence reads as success.
-        let manifest = match read_manifest(&manifest_path)? {
-            ManifestRead::Found(manifest) => manifest,
-            ManifestRead::Rejected(reason) => {
-                return Err(format!(
-                    "{} is not a valid manifest ({reason}) — nothing was removed",
-                    manifest_path.display()
-                ))
-            }
-            ManifestRead::Absent | ManifestRead::Corrupt(_) => {
-                targets.push(UninstallTargetReport {
-                    target: root.to_string(),
-                    totals: UninstallTotals::default(),
-                    files: Vec::new(),
-                });
-                continue;
-            }
+        // not a failure.
+        let Some(entries) = entries else {
+            targets.push(UninstallTargetReport {
+                target: root.to_string(),
+                totals: UninstallTotals::default(),
+                files: Vec::new(),
+            });
+            continue;
         };
-
-        let mut entries = manifest.files;
-        entries.sort_by(|a, b| a.path.cmp(&b.path));
-
-        // Checked up front so a refusal removes nothing at all.
-        for entry in &entries {
-            refuse_symlink(root_path, entry.path.as_path())?;
-        }
 
         let mut target_totals = UninstallTotals::default();
         let mut file_reports = Vec::with_capacity(entries.len());
@@ -689,7 +742,9 @@ fn place(target: &Path, contents: &[u8], force: bool) -> Result<Status, String> 
 }
 
 /// Refuse a symlink anywhere under `root`, the file included, since access
-/// through it lands outside. The root itself may be one: people link it into dotfiles.
+/// through it lands outside. `root` itself is not checked, so callers pass `.`
+/// and the root's own path to cover `.claude` and `.claude/skills`, which a
+/// repo chooses; only the working directory is the user's.
 fn refuse_symlink(root: &Path, rel: &Path) -> Result<(), String> {
     let mut current = root.to_path_buf();
     for component in rel.components() {
@@ -757,8 +812,25 @@ fn write_manifest(root: &Path, entries: BTreeMap<ManifestPath, String>) -> Resul
     let json = serde_json::to_string_pretty(&manifest)
         .map_err(|err| format!("could not serialize manifest: {err}"))?;
 
+    // A rerun that changed nothing must not need write access to the root.
+    if std::fs::read(&path).is_ok_and(|existing| existing == json.as_bytes()) {
+        return Ok(());
+    }
     let tmp = root.join(format!("{MANIFEST_FILENAME}.tmp"));
     write_atomic(&path, &tmp, json.as_bytes(), false)
+}
+
+/// The placing error is the one worth reporting. When the manifest could not
+/// be written either, say what that costs.
+fn combine(placing: Result<(), String>, written: Result<(), String>) -> Result<(), String> {
+    match (placing, written) {
+        (Err(placing), Err(written)) => Err(format!(
+            "{placing}; and {written}, so files already placed are not tracked and \
+             --uninstall cannot remove them"
+        )),
+        (Err(placing), Ok(())) => Err(placing),
+        (Ok(()), written) => written,
+    }
 }
 
 /// Write `contents` to `path` through `tmp` and rename it into place, so a
@@ -880,11 +952,46 @@ mod tests {
     use super::*;
 
     #[test]
+    fn a_manifest_write_failure_is_not_hidden_by_a_placing_failure() {
+        let both = combine(Err("placing".to_string()), Err("manifest".to_string()))
+            .expect_err("both failed");
+        assert!(
+            both.contains("placing") && both.contains("manifest"),
+            "{both}"
+        );
+        assert!(
+            both.contains("uninstall"),
+            "says what the loss means: {both}"
+        );
+        assert_eq!(
+            combine(Err("placing".to_string()), Ok(())),
+            Err("placing".to_string())
+        );
+        assert_eq!(
+            combine(Ok(()), Err("manifest".to_string())),
+            Err("manifest".to_string())
+        );
+        assert_eq!(combine(Ok(()), Ok(())), Ok(()));
+    }
+
+    #[test]
     fn manifest_paths_must_be_plain_and_relative() {
         for good in ["a", "gist-outline/SKILL.md"] {
             assert!(ManifestPath::try_from(good.to_string()).is_ok(), "{good}");
         }
-        for bad in ["", "/", "/etc/passwd", "..", "../x", "a/../../x", "./a"] {
+        for bad in [
+            "",
+            "/",
+            "/etc/passwd",
+            "..",
+            "../x",
+            "a/../../x",
+            "./a",
+            "a//b",
+            "a/./b",
+            "a/",
+            "a/b/",
+        ] {
             assert!(ManifestPath::try_from(bad.to_string()).is_err(), "{bad}");
         }
     }

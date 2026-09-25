@@ -84,9 +84,12 @@ overridable with `--force` — instead of re-deriving a removal list from
 whichever skills the running binary currently embeds (see
 `docs/adr/0007-manifest-driven-uninstall.md`). `init` and `--uninstall` refuse
 to read or write through a symlink under the target, such as one
-`scripts/link.sh` made; remove the link first. The target directory itself may
-be a symlink. A manifest is treated as untrusted input, since a repo can carry
-one (see `docs/adr/0008-untrusted-manifests-and-symlinks.md`).
+`scripts/link.sh` made; remove the link first. That includes `.claude`,
+`.claude/skills` and `.agents/skills` themselves, since a repo can commit a link
+there; only the working directory may be one. Every root is checked before any
+is written or emptied. A manifest is treated as untrusted input, since a repo can
+carry one (see `docs/adr/0008-untrusted-manifests-and-symlinks.md` and
+`docs/adr/0010-refuse-a-symlinked-root-and-check-every-root-first.md`).
 
 ## Composition
 

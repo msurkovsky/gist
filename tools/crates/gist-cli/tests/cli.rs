@@ -912,15 +912,128 @@ fn uninstall_removes_nothing_when_a_recorded_path_crosses_a_symlink() {
 
 #[cfg(unix)]
 #[test]
-fn a_symlinked_skills_root_is_still_allowed() {
+fn a_symlinked_skills_root_is_refused() {
     let repo = Repo::new();
     let real = TempDir::new().expect("temp dir");
     std::fs::create_dir_all(repo.path().join(".claude")).expect("mkdir");
     std::os::unix::fs::symlink(real.path(), repo.path().join(".claude/skills")).expect("symlink");
 
-    repo.data(&["init", "--claude"]);
+    let (code, message) = repo.error(&["init", "--claude"]);
 
-    assert!(real.path().join("gist-outline/SKILL.md").exists());
+    assert_eq!(code, 1);
+    assert!(message.contains("symlink"), "got: {message}");
+    assert_eq!(
+        std::fs::read_dir(real.path()).expect("read").count(),
+        0,
+        "nothing may land where a repo's link points"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn a_symlinked_dot_claude_is_refused_by_install_and_uninstall() {
+    let repo = Repo::new();
+    let real = TempDir::new().expect("temp dir");
+    std::os::unix::fs::symlink(real.path(), repo.path().join(".claude")).expect("symlink");
+
+    let (code, message) = repo.error(&["init", "--claude", "--force"]);
+    assert_eq!(code, 1);
+    assert!(message.contains("symlink"), "got: {message}");
+    assert_eq!(std::fs::read_dir(real.path()).expect("read").count(), 0);
+
+    // What a hostile repo would plant behind the link: a manifest and a
+    // file it names, matching, so uninstall would remove it.
+    let victim = real.path().join("skills/gist-outline/SKILL.md");
+    std::fs::create_dir_all(victim.parent().expect("parent")).expect("mkdir");
+    std::fs::write(&victim, "precious").expect("write");
+    plant_manifest(&repo, "gist-outline/SKILL.md", &sha256_hex(b"precious"));
+
+    let (code, message) = repo.error(&["init", "--claude", "--uninstall"]);
+    assert_eq!(code, 1);
+    assert!(message.contains("symlink"), "got: {message}");
+    assert!(
+        victim.exists(),
+        "uninstall must not remove through the link"
+    );
+}
+
+#[test]
+fn install_checks_every_root_before_writing_any() {
+    let repo = Repo::new();
+    repo.write(
+        ".agents/skills/.gist-manifest.json",
+        "{\"files\":[{\"path\":\"../x\"}]}",
+    );
+
+    let (code, _) = repo.error(&["init", "--claude", "--codex"]);
+
+    assert_eq!(code, 1);
+    assert!(
+        !repo.path().join(".claude").exists(),
+        "the first root must not be installed when the second is refused"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn a_symlink_found_late_in_the_skill_order_leaves_nothing_installed() {
+    let repo = Repo::new();
+    let outside = TempDir::new().expect("temp dir");
+    std::fs::create_dir_all(repo.path().join(".claude/skills")).expect("mkdir");
+    std::os::unix::fs::symlink(
+        outside.path(),
+        repo.path().join(".claude/skills/gist-toolchain"),
+    )
+    .expect("symlink");
+
+    let (code, message) = repo.error(&["init", "--claude"]);
+
+    assert_eq!(code, 1);
+    assert!(message.contains("symlink"), "got: {message}");
+    assert!(!repo.path().join(".claude/skills/gist-outline").exists());
+    assert!(!repo
+        .path()
+        .join(".claude/skills/.gist-manifest.json")
+        .exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn uninstall_checks_every_root_before_removing_any() {
+    let repo = Repo::new();
+    repo.data(&["init", "--claude", "--codex"]);
+    let outside = TempDir::new().expect("temp dir");
+    let codex_skill = repo.path().join(".agents/skills/gist-outline");
+    std::fs::remove_dir_all(&codex_skill).expect("remove");
+    std::os::unix::fs::symlink(outside.path(), &codex_skill).expect("symlink");
+
+    let (code, message) = repo.error(&["init", "--claude", "--codex", "--uninstall"]);
+
+    assert_eq!(code, 1);
+    assert!(message.contains("symlink"), "got: {message}");
+    assert!(
+        repo.path().join(".claude/skills/gist-doc-review").exists(),
+        "a refusal in one root removes nothing in the other"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn an_unchanged_rerun_does_not_rewrite_the_manifest() {
+    use std::os::unix::fs::MetadataExt;
+    let repo = Repo::new();
+    repo.data(&["init", "--claude"]);
+    let path = repo.path().join(".claude/skills/.gist-manifest.json");
+    let before = std::fs::metadata(&path).expect("stat").ino();
+
+    let data = repo.data(&["init", "--claude"]);
+
+    assert_eq!(data["totals"]["installed"], 0);
+    assert_eq!(
+        std::fs::metadata(&path).expect("stat").ino(),
+        before,
+        "a rerun that changed nothing should not replace the file"
+    );
 }
 
 #[test]
@@ -1071,9 +1184,11 @@ fn rerunning_without_experimental_keeps_earlier_experimental_files_tracked() {
 #[test]
 fn an_io_failure_partway_still_records_the_files_already_placed() {
     let repo = Repo::new();
-    // A file where a skill directory belongs: skills before it place fine,
-    // then the run fails on this one.
-    repo.write(".claude/skills/gist-outline", "in the way");
+    // A directory where a skill file belongs passes every check made before
+    // the first write. Skills sorted before it place fine, then the run fails
+    // reading this one.
+    std::fs::create_dir_all(repo.path().join(".claude/skills/gist-outline/SKILL.md"))
+        .expect("mkdir");
 
     let (code, message) = repo.error(&["init", "--claude"]);
     assert_eq!(code, 1);
@@ -1088,10 +1203,10 @@ fn an_io_failure_partway_still_records_the_files_already_placed() {
     let data = repo.data(&["init", "--claude", "--uninstall"]);
     assert_eq!(data["totals"]["removed"], files.len() as u64);
     assert!(!repo.path().join(".claude/skills/gist-doc-review").exists());
-    assert_eq!(
-        std::fs::read_to_string(repo.path().join(".claude/skills/gist-outline")).expect("read"),
-        "in the way"
-    );
+    assert!(repo
+        .path()
+        .join(".claude/skills/gist-outline/SKILL.md")
+        .is_dir());
 }
 
 #[test]

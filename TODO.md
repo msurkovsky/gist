@@ -40,10 +40,6 @@
 
 ## Later: decisions left open by the init review
 
-- `init --claude --codex --uninstall`: a refusal in one root leaves the other
-  already removed, so ADR 0008's "a refusal removes nothing" holds per root only.
-  Either reword it, or check every root before touching any, and pin the choice
-  with a test.
 - `init` output is unbounded: 202 lines / 20 KB with `--experimental=mattpocock`,
   and no `--limit`, against `docs/tool-contract.md`. Add `--limit` for the
   per-file listing (totals stay complete), or record the exception in the contract.
