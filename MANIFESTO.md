@@ -16,8 +16,9 @@ This governs this repo. It is not a position on AI in general, not advice for
 anyone else's project, and not a claim that the trade-offs here transfer.
 
 It is the root. `CLAUDE.md`, `rules/`, the skills, and the hooks derive from
-it: this file says why, `CLAUDE.md` and `rules/` say what, hooks enforce what
-cannot be allowed to slip. Where they disagree, the lower one is wrong.
+it: this file says why, `CLAUDE.md` and `rules/` say what, hooks hold what
+cannot be allowed to slip, as a gate or as a reminder. Where they disagree, the
+lower one is wrong.
 
 It describes the repo as it is meant to be, and the repo is held to it. Where
 the repo falls short, `TODO.md` names the gap; the gap is a defect in the repo,
@@ -38,23 +39,26 @@ that means here.
 
 ## 1. Provenance is not the question
 
-We do not ask who wrote a line. A rule about authorship cannot be checked, so it
-degrades into self-disclosure, then into suspicion, then into a clause about not
-harassing people over suspicion.
+We do not ask who wrote a line. A rule about authorship cannot be checked, and
+in practice it degrades into self-disclosure, then into suspicion, then into a
+clause about not harassing people over suspicion.
 
 Ask instead what the text is for, and who has to trust it.
 
 ## 2. Prose is the source. Code is the build.
 
 Before compilers, people read the assembly. Then the compiler earned a spec,
-determinism, and millions of users a day, and nobody reads object code now — not
-because it is long, because trust was delegated to a translator that earned it.
+determinism, and millions of users a day, and almost nobody reads object code
+now — not because it is long, because trust was delegated to a translator that
+earned it.
 
 The model is the next translator. Its source is prose in a natural language:
 the architecture, the design, the test cases, the decisions. Its output is
-code. It has neither a spec nor determinism, so the delegation is not automatic.
-It is bought, not declared — bought with checks derived from the source: tests
-built from the test cases, types, lints, invariants at the boundaries.
+code. The prose is the spec a compiler had; the test cases are its conformance
+suite. What the model lacks is determinism, and that is the gap the human gates
+and the coherence check below exist to close. So the delegation is not
+automatic. It is bought, not declared — bought with tests derived from the
+source, and with types, lints, and invariants at the boundaries around them.
 
 We are where 1970 was with assembly. People still read the output. Less each
 year, and only where they choose to.
@@ -62,26 +66,37 @@ year, and only where they choose to.
 ## 3. Review moves up
 
 Reading every line at the speed a model writes them does not scale. It cannot
-move to the tests either; tests are code. It moves up, to the prose.
+move to the tests either; tests are code, written at the same speed. It moves
+up, to the prose.
 
 The order is fixed. A problem is stated. A plan is written and a human judges
 it. The plan becomes a change to the docs — architecture, design, test cases,
 decisions — and a human reads that change: what it said before, what it says
 now, whether it makes sense. Only then is code written, and the checks run
-against it: the tooling, and a coherence check that the code still says what
-the docs say.
+against it: the tooling, and a coherence check.
 
-The human reads prose twice and code as much as they want to, which may be
-never. That is the whole shift.
+The model may draft the prose. That is fine, and it is the point: prose is the
+altitude a human can still read at model speed, code is not. The gate is the
+human reading, not the human typing.
+
+The coherence check has two halves. The mechanical half walks the links from
+code to the prose that sources it and pairs each changed region with the
+section it must agree with. The judging half reads each pair and says whether
+they agree, and it runs in a context that did not write the code. Its answers
+are input to the human, never a verdict. A tool that grades itself is not a
+reviewer, and neither is a tool whose answer nobody weighs.
+
+The human reads prose at two gates and code as much as they want to, which may
+be never. That is the whole shift.
 
 A plan expires when its branch merges. By then the docs, the test cases, and
-the ADRs carry everything it said. A plan that survives merge is a second
-source of truth, and there is only one.
+the ADRs carry everything it said that is still true of the system. A plan
+that survives merge is a second source of truth, and there is only one.
 
-The review is driven by the human, not run for them. They come with the docs
-and their own picture, and they ask: is this code aligned with that section,
-show me what changed, does this hold. A tool answers. The human judges the
-answer against what they know. A tool that grades itself is not a reviewer.
+The review is driven by the human, not run for them. They come with the intent
+they stated and the docs they approved, and they ask: is this code aligned
+with that section, show me what changed, does this hold. A tool answers. The
+human weighs the answer against the intent.
 
 ## 4. Reading is a tool, not a duty
 
@@ -103,7 +118,7 @@ change that shipped green and broke is theirs, read or unread.
 Some areas warrant low confidence by default — code that deletes, formats
 written to disk and read back later, input from outside this repo, anything
 whose cost is not reversible. Those are declared per area, so a hook can say
-so when a change touches one. It is a hint about where to probe, not a gate.
+so when a change touches one. It is a reminder of where to probe, not a gate.
 When a probe catches something, the area it caught it in is declared.
 
 ## 5. Test cases are the spec
@@ -111,32 +126,36 @@ When a probe catches something, the area it caught it in is declared.
 If lines are not the review target, something has to make "does what I intend"
 checkable. That is the test cases: prose, one behaviour each, at the boundaries
 that matter, approved by the human at the docs gate. The tests are their build.
-The model writes them, each names the case it implements, and each is proven
-red once.
+The model writes them, and each names the case it implements.
 
-This is where the bar cannot slip. Slop cases produce a green pipeline that
-vouches for nothing, silently. Hence `rules/code-and-comments.md`: a test that
-passes with the guarded line deleted is not a test, and every new test is
-proven red at least once.
+This is where the bar cannot slip, and it can slip at either layer. Slop cases
+produce a green pipeline that vouches for nothing, silently; the only guard for
+a case is the human who reads it at the docs gate, and that is what the gate
+is for. Slop tests do the same one level down, and there the guard is
+`rules/code-and-comments.md`: a test that passes with the guarded line deleted
+is not a test, and every new test is proven red at least once.
 
-The cutoff is the same as for comments. Public behaviour and boundaries get
-cases. A clear private helper gets none.
+The cutoff is the one that rule sets for comments, where a clear private
+helper gets nothing. Public behaviour and boundaries get cases. A clear
+private helper gets none.
 
 ## 6. No hidden knowledge
 
 The bare minimum for participation is not the code. It is the architecture, the
 decisions, and the trade-offs, and those live beside the code. In it they are
-rarely recorded and never surfaced. Some projects record them well. Where they
+rarely recorded and seldom surfaced. Some projects record them well. Where they
 are not recorded, they move by conversation instead, which is most of what
 onboarding actually is.
 
 Conversation is the channel this repo refuses to depend on. It does not scale
-past the people in the room, and it leaves nothing an agent can read.
+past the people in the room, and it leaves nothing an agent can read. An answer
+a tool derives from the prose and the code is not conversation; anyone can ask
+again, and what it was derived from is in the tree. An answer from a head is.
 
 What makes tribal knowledge tribal is negative space. How it works is readable.
 What is not readable: why not the obvious alternative, what was tried and
 failed, what this must never do. Code records the decision it embodies and
-nothing surfaces the ones it rejected. Hence the rule for `docs/adr/`: add one
+seldom surfaces the ones it rejected. Hence the rule for `docs/adr/`: add one
 when the rejected options were real.
 
 The source has altitudes. Conceptual: the system and its parts, as a diagram
@@ -160,9 +179,15 @@ It needs events, and there are three, all cheap and all frequent:
    artifact.
 2. You correct an agent's architectural move. The constraint it broke was
    unwritten.
-3. The coherence check finds prose and code disagreeing. Either the code
-   drifted and is rebuilt from the prose, or the prose was incomplete and the
-   artifact is written. Prose wins. The answer is never "read more lines".
+3. The coherence check finds prose and code disagreeing, and you confirm it.
+
+The third needs a criterion. Refinement adds how; it never adds what. Code that
+does something no case and no design line asks for is drift, or a decision
+nobody made. Drift is rebuilt from the prose. A missing decision goes back
+through the docs gate, late but through it. Either way the prose is where it
+ends up written. A defect that reaches main is the same event found late: the
+case that would have caught it was never written. The remedy is never more
+reading; a probe is still yours to take.
 
 Each one is a leak with a location. Write the artifact, not the reply. A
 constraint that leaks twice graduates — to a rule, then to a hook, the same
@@ -189,10 +214,11 @@ And reachable at the decision. `docs/` is storage; retrieval is what makes it
 knowledge. `CLAUDE.md` points from each rule to the decision behind it and loads
 every session. `README.md` points from the layout. A module's doc comment
 points at the section that sources it — `init.rs` already does this for its
-ADRs, and the coherence check walks those same links to know which prose to
-hold which code against. A skill surfaces a decision at the step where it
-applies and keeps its own long material in `references/`, loaded on demand and
-not before. A decision no pointer reaches is tribal knowledge with extra steps.
+ADRs, and the coherence check is meant to walk the same links to know which
+prose to hold which code against. A skill surfaces a decision at the step where
+it applies and keeps its own long material in `references/`, loaded on demand
+and not before. A decision no pointer reaches is tribal knowledge with extra
+steps.
 
 ## What participation means
 
