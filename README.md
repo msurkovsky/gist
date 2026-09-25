@@ -21,10 +21,12 @@ tools/          cargo workspace; builds the gk binary
 scripts/        repo glue: vendoring, local symlinks, the consistency check
 docs/           tool contract, and decisions in docs/adr
 TODO.md         what comes next
+MANIFESTO.md    the premise: prose is the source, code is the build, review moves up
 ```
 
-`CONTRIBUTING.md` has a recipe per kind of change, `CLAUDE.md` the rules agents must
-not break, `just ci` the enforcement of both.
+`MANIFESTO.md` has the premise the rest follows from — read it first if you want to
+know whether this is for you. `CONTRIBUTING.md` has a recipe per kind of change,
+`CLAUDE.md` the rules agents must not break, `just ci` the enforcement of both.
 
 ## Skills
 

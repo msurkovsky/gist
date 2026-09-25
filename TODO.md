@@ -62,3 +62,31 @@
 
 - `scripts/vendor.sh` runs `git fetch -q "$url" "$branch"` without `--`, so a
   `vendors.conf` URL starting with `-` is read as a git option. Contributors only.
+
+## Later: close the gaps between `MANIFESTO.md` and the repo
+
+The manifesto describes the repo as it is meant to be. Each line here is a
+place where the repo does not follow it yet.
+
+- Principle 6 names the source altitudes. This repo has ADRs and the layout
+  block in `README.md`; no conceptual diagram, no architecture page, no design
+  notes per part. Write them as text in the tree, small enough that the top
+  three share one page. Diagram notation undecided; it must diff.
+- Principle 5 says test cases are prose the human approves and every test names
+  its case. No test cases exist. `tests/cli.rs` names describe behaviour but
+  link to nothing. Decide the format and the link, then backfill.
+- Principle 3 says review is human-driven with a tool that answers "is this code
+  aligned with that section" and "show me what changed in the docs". No such
+  skill. The deterministic half — which prose sources which changed file, the
+  test-to-case link, red-on-parent — is a `gk` subcommand; the judgement half
+  is a skill.
+- Principle 3 says a plan expires when its branch merges. `README.md` says plans
+  live in `.todo/`; nothing is there. Decide where plans live while open and
+  write the expiry into `CONTRIBUTING.md`.
+- Principle 4 says low-confidence areas are declared per area so a hook can hint
+  when a change touches one. Nothing declares them. Decide the format and what
+  the hook emits. A hint, not a gate.
+- Principle 8 says every decision has a pointer that reaches it. `docs/adr/0001`
+  has none outside `docs/adr/`. Module docs in `init.rs` and `hook.rs` already
+  point at their ADRs; name that convention and check it in `scripts/check.sh`
+  or `gk`.
