@@ -1,6 +1,6 @@
 # 10. Refuse a symlinked target root, and check every root before writing
 
-Accepted — 2026-09-25. Supersedes the root-symlink part of `docs/adr/0008`.
+Accepted — 2026-09-25.
 
 ## Context
 
@@ -102,4 +102,5 @@ directory belongs, trips the first phase.
 
 | When | Who | Why |
 |---|---|---|
+| 2026-09-25 19:02 | Martin Surkovsky | Dropped the supersedes note, since ADR 0008 now states the root-symlink rule itself |
 | 2026-09-25 06:51 | Martin Surkovsky | Created |
