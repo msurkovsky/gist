@@ -44,7 +44,7 @@ import_one() {
     msg="Import $name at ${up:0:7}"
     extra+=(--allow-unrelated-histories)
   fi
-  git merge -q --no-ff "${extra[@]}" -m "$msg" -m "Upstream: $url@$up" -m "Filter: :prefix=$prefix" FILTERED_HEAD
+  git merge -q --no-ff ${extra[@]+"${extra[@]}"} -m "$msg" -m "Upstream: $url@$up" -m "Filter: :prefix=$prefix" FILTERED_HEAD
   echo "   merged $(git rev-list --count HEAD^..HEAD^2 2>/dev/null || echo '?') commits"
 }
 
