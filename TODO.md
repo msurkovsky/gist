@@ -80,9 +80,10 @@ place where the repo does not follow it yet.
   skill. The deterministic half — which prose sources which changed file, the
   test-to-case link, red-on-parent — is a `gk` subcommand; the judgement half
   is a skill.
-- Principle 3 says a plan expires when its branch merges. `README.md` says plans
-  live in `.todo/`; nothing is there. Decide where plans live while open and
-  write the expiry into `CONTRIBUTING.md`.
+- Principle 3 says a plan expires when its branch merges. Plans live in this
+  file, and the `Done:` lines above are plans that outlived their merge; the
+  ADRs they cite already carry what they say. Delete them, and write the
+  expiry into `CONTRIBUTING.md`: when a branch merges, its entry here goes.
 - Principle 4 says low-confidence areas are declared per area so a hook can hint
   when a change touches one. Nothing declares them. Decide the format and what
   the hook emits. A hint, not a gate.

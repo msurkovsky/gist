@@ -20,7 +20,7 @@ views/          Josh workspaces — what a consumer sees of this repo
 tools/          cargo workspace; builds the gk binary
 scripts/        repo glue: vendoring, local symlinks, the consistency check
 docs/           tool contract, and decisions in docs/adr
-TODO.md         what comes next
+TODO.md         what comes next, and the plans behind it
 MANIFESTO.md    the premise: prose is the source, code is the build, review moves up
 ```
 
