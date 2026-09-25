@@ -65,5 +65,10 @@ GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=mr.commitPattern GIT_CONFIG_VALUE_0='^([a-z]
 rm -f "$t"
 echo '{"tool_input":{"command":"git pull --rebase origin main"}}' | hooks/post-rebase-nag.sh | grep -q 'Rebase detected' && ok "post-rebase-nag fires" || bad "post-rebase-nag silent on rebase"
 [ -z "$(echo '{"tool_input":{"command":"git rebase --abort"}}' | hooks/post-rebase-nag.sh)" ] && ok "post-rebase-nag silent on abort" || bad "post-rebase-nag fires on abort"
+echo 'not json' | hooks/post-rebase-nag.sh >/dev/null 2>&1 && bad "post-rebase-nag swallows unparseable input" || ok "post-rebase-nag fails on unparseable input"
+case "$(echo '{}' | env PATH=/nonexistent "$BASH" hooks/post-rebase-nag.sh 2>&1)" in
+  *node*) ok "post-rebase-nag says so when node is missing" ;;
+  *) bad "post-rebase-nag is silent when node is missing" ;;
+esac
 
 [ $fail -eq 0 ] && echo "all checks passed" || { echo "checks failed"; exit 1; }
