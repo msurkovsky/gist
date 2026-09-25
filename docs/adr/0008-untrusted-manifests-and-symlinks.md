@@ -1,8 +1,6 @@
 # 8. Treat manifests and symlinks under a target as untrusted input
 
-Accepted — 2026-09-24. Partly superseded by `docs/adr/0010`: the target root
-itself may not be a symlink, and `a_symlinked_skills_root_is_still_allowed` below
-became `a_symlinked_skills_root_is_refused`.
+Accepted — 2026-09-24.
 
 ## Context
 
@@ -67,8 +65,8 @@ not re-checked.
 **`refuse_symlink(root, rel)`** inspects every component under the root, the
 file itself included, with `symlink_metadata`, before each manifest access,
 placement, and removal. The error names the symlink and says to remove it. The
-root itself may be a symlink: the user chooses it, the repo does not, and people
-link `~/.claude/skills` into a dotfiles repo. `--uninstall` checks every recorded
+root itself, and `.claude` above it, may not be a symlink either, since a repo
+can commit one there (`docs/adr/0010`). `--uninstall` checks every recorded
 path before removing any, so a refusal removes nothing.
 
 **A manifest that is JSON but not a valid manifest** (`Rejected`: a bad path, a
@@ -118,13 +116,12 @@ end-to-end:
 `init_refuses_a_manifest_that_is_a_dangling_symlink`,
 `uninstall_removes_nothing_when_a_recorded_path_crosses_a_symlink`,
 `uninstall_refuses_a_manifest_that_is_a_symlink`,
-`a_symlinked_skills_root_is_still_allowed`,
+`a_symlinked_skills_root_is_refused` (ADR 0010),
 `writing_the_manifest_leaves_no_temporary_file_and_clears_a_stale_one`, and
 `a_symlink_planted_at_the_temporary_name_is_not_written_through`.
 
-Each was run red against the source from just before its fix, with two
-exceptions. `a_symlinked_skills_root_is_still_allowed` guards against
-over-blocking and passes either way. `a_symlink_planted_at_the_temporary_name_is_not_written_through`
+Each was run red against the source from just before its fix, with one
+exception. `a_symlink_planted_at_the_temporary_name_is_not_written_through`
 had no old behaviour to fail against, since the old code used no temporary
 file, so it was checked by mutating the new implementation to a plain write.
 
@@ -132,5 +129,6 @@ file, so it was checked by mutating the new implementation to a plain write.
 
 | When | Who | Why |
 |---|---|---|
+| 2026-09-25 19:00 | Martin Surkovsky | Stated the root-symlink refusal from ADR 0010 in the body instead of a header note |
 | 2026-09-25 07:19 | Martin Surkovsky | Named the renamed root-symlink test after ADR 0010 refused a symlinked root |
 | 2026-09-24 22:56 | Martin Surkovsky | Created |

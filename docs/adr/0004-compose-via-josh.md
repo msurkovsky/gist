@@ -1,8 +1,6 @@
 # 4. Compose third-party skills with Josh
 
-Accepted — 2026-09-24. Partly superseded by `docs/adr/0005`: `gk init
---experimental=<package>` installs an `experimental/` tree's skills, so a view is no
-longer the only way to try one in a project.
+Accepted — 2026-09-24.
 
 ## Context
 
@@ -61,8 +59,9 @@ and upstream commit.
 The same machinery gives consumers projections: `views/<consumer>/workspace.josh`
 maps flat skill names onto paths of this repo and is cloned with
 `josh clone ':workspace=views/<consumer>'`, with `josh push` writing edits back.
-This is the only way to try a skill from `experimental/` in a project, since
-`gk init --claude` vendors `skills/` alone.
+A view is the way to work on an `experimental/` tree's history from a project.
+To only use its skills there, `gk init --experimental=<package>` installs them
+without one (`docs/adr/0005`).
 
 ## Consequences
 
@@ -86,5 +85,6 @@ unchanged upstream reports `up to date` and creates no commit.
 
 | When | Who | Why |
 |---|---|---|
+| 2026-09-25 19:00 | Martin Surkovsky | Stated what views are for now that `gk init --experimental` exists, instead of a header note |
 | 2026-09-25 07:19 | Martin Surkovsky | Noted that `gk init --experimental` (ADR 0005) made a view no longer the only way to try a vendored skill |
 | 2026-09-24 18:15 | Martin Surkovsky | Created |

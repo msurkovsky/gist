@@ -1,7 +1,6 @@
 # 3. Prefix vendored skill names
 
-Accepted — 2026-09-24. The prefix is enforced now: `scripts/check.sh` fails on a
-skill directory without it, and `CLAUDE.md` says so.
+Accepted — 2026-09-24.
 
 ## Context
 
@@ -54,9 +53,8 @@ unrelated `gk outline` CLI subcommand, so the rename is isolated.
 ## Consequences
 
 This repo's own skills are now named with the `gist-` prefix everywhere,
-including locally. The prefix is convention, not enforced — a future skill
-added without it would still pass the name/directory-match test, so it is
-worth a mention in `CLAUDE.md`. This narrows collisions, it does not
+including locally. `scripts/check.sh` fails on a skill directory without the
+prefix, and `CLAUDE.md` states the rule. This narrows collisions, it does not
 eliminate them — a target repo could still have its own `gist-outline`; that
 is inherent to Claude Code's flat project-skill discovery, not something `gk`
 can fix.
@@ -71,5 +69,6 @@ can fix.
 
 | When | Who | Why |
 |---|---|---|
+| 2026-09-25 19:00 | Martin Surkovsky | Replaced the "not enforced" consequence with the check that enforces it, instead of a header note |
 | 2026-09-25 07:19 | Martin Surkovsky | Noted that `scripts/check.sh` now enforces the prefix, which it did not when accepted |
 | 2026-09-24 07:20 | Martin Surkovsky | Created |

@@ -1,7 +1,6 @@
 # 1. Diff with libgit2
 
-Accepted — 2026-09-23. Implemented in `b9ea9a0`. The scope is `gk doc`; `gk hook`
-runs `git` itself, for the reasons in `docs/adr/0009`.
+Accepted — 2026-09-23. Implemented in `b9ea9a0`.
 
 ## Context
 
@@ -62,11 +61,13 @@ already understands `a..b` and `a...b`.
 
 ## Decision
 
-Use `git2`, with `default-features = false`.
+Use `git2` for `gk doc`, with `default-features = false`.
 
 One dependency covers the diff, all four sources, and the post-image lookup.
 It removes the unified-diff parser, the hunk arithmetic, the path unquoting,
-the untracked-files pass, and every `Command::new("git")` in the crate.
+the untracked-files pass, and every `Command::new("git")` from `gk doc`.
+`gk hook` only reads config and runs `git` itself, for the reasons in
+`docs/adr/0009`.
 
 Turning off default features drops https and ssh, so no OpenSSL: this tool
 only ever reads local repositories. The cost was measured before committing —
@@ -111,5 +112,6 @@ Old and new binaries, same ranges, same repository:
 
 | When | Who | Why |
 |---|---|---|
+| 2026-09-25 19:00 | Martin Surkovsky | Moved the `gk doc` scope from a header note into the Decision |
 | 2026-09-25 07:19 | Martin Surkovsky | Noted that `gk hook` runs `git` directly (ADR 0009), so the scope reads as `gk doc` only |
 | 2026-09-23 20:12 | Martin Surkovsky | Created |
