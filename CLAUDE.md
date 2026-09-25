@@ -31,7 +31,8 @@ Skills are the product. Tools exist to serve them. `README.md` has the layout,
 - `scripts/` — repo glue in shell, reached through `just` recipes.
 - `docs/tool-contract.md` — read before adding a subcommand.
 - `docs/adr/` — one file per decision worth not re-litigating. Add one when
-  the rejected options were real.
+  the rejected options were real. Keep it current with the code, and log each
+  change in its `## Changelog`; `docs/adr/README.md` has the format.
 
 ## Language
 

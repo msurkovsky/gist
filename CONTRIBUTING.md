@@ -13,7 +13,7 @@ says how to do things. Run `just ci` before every commit.
 | Always-on constraint | `rules/<topic>.md` | us |
 | Deterministic guard | `gk hook <name>` (git), `hooks/<name>.sh` (Claude Code) | us |
 | What a consumer sees | `views/<consumer>/workspace.josh` | us |
-| Decision worth not re-litigating | `docs/adr/NNNN-<slug>.md` | us |
+| Decision worth not re-litigating | `docs/adr/NNNN-<slug>.md`, kept current, each change logged in its Changelog | us |
 
 ## Add an owned skill
 
