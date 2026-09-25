@@ -127,3 +127,10 @@ exceptions. `a_symlinked_skills_root_is_still_allowed` guards against
 over-blocking and passes either way. `a_symlink_planted_at_the_temporary_name_is_not_written_through`
 had no old behaviour to fail against, since the old code used no temporary
 file, so it was checked by mutating the new implementation to a plain write.
+
+## Changelog
+
+| When | Who | Why |
+|---|---|---|
+| 2026-09-25 07:19 | Martin Surkovsky | Named the renamed root-symlink test after ADR 0010 refused a symlinked root |
+| 2026-09-24 22:56 | Martin Surkovsky | Created |

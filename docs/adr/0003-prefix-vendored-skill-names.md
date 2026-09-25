@@ -66,3 +66,10 @@ can fix.
 `the_embedded_skills_are_present_and_named_with_the_gist_prefix` and
 `every_embedded_skill_declares_a_frontmatter_name_matching_its_directory`
 (both in `init.rs`).
+
+## Changelog
+
+| When | Who | Why |
+|---|---|---|
+| 2026-09-25 07:19 | Martin Surkovsky | Noted that `scripts/check.sh` now enforces the prefix, which it did not when accepted |
+| 2026-09-24 07:20 | Martin Surkovsky | Created |

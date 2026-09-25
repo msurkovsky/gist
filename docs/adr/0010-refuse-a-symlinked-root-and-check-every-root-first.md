@@ -97,3 +97,9 @@ behaviour), `a_symlinked_dot_claude_is_refused_by_install_and_uninstall`,
 `an_io_failure_partway_still_records_the_files_already_placed` now plants a
 directory where a skill file belongs. Its old setup, a file where a skill
 directory belongs, trips the first phase.
+
+## Changelog
+
+| When | Who | Why |
+|---|---|---|
+| 2026-09-25 06:51 | Martin Surkovsky | Created |

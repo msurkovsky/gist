@@ -10,6 +10,7 @@
 #   3. every skill directory carries the gist- prefix (docs/adr/0003)
 #   4. every skill is listed in README.md
 #   5. no local edits under experimental/ (scripts/vendor.sh check)
+#   6. every docs/adr/0*.md ends with a Changelog table of at least one row
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"; cd "$ROOT"
 fail=0
@@ -40,5 +41,11 @@ if [ -x scripts/vendor.sh ] && [ -d experimental ]; then
   out="$(scripts/vendor.sh check)"
   [ "$out" = "clean: no local edits under experimental/" ] && ok "experimental/ untouched" || { bad "local edits under experimental/:"; printf '%s\n' "$out" | sed 's/^/      /'; }
 fi
+
+# 6
+for f in docs/adr/0*.md; do
+  awk '/^## /{in_log=($0=="## Changelog")} in_log&&/^\| [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9] [0-9][0-9]:[0-9][0-9] \|/{rows++} END{exit !rows}' "$f" \
+    && ok "$f changelog" || bad "$f: needs a '## Changelog' table with a dated row (docs/adr/README.md)"
+done
 
 [ $fail -eq 0 ] && echo "all checks passed" || { echo "checks failed"; exit 1; }

@@ -111,3 +111,10 @@ proposed here is Codex-specific beyond the root path itself.
 `init_codex_is_idempotent_on_a_second_run`,
 `init_without_a_target_is_a_refusal_not_misuse`, and
 `init_experimental_alone_is_still_a_refusal_no_implicit_target`.
+
+## Changelog
+
+| When | Who | Why |
+|---|---|---|
+| 2026-09-24 23:05 | Martin Surkovsky | Corrected the flag rule, since `--experimental` alone is refused, and named the tests that exist |
+| 2026-09-24 18:51 | Martin Surkovsky | Created |

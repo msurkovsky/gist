@@ -53,3 +53,10 @@ gotcha worth remembering.
 
 `the_embedded_skills_are_present_and_named_with_the_gist_prefix` (in
 `init.rs`) fails the build immediately if `skills/` moves or empties out.
+
+## Changelog
+
+| When | Who | Why |
+|---|---|---|
+| 2026-09-25 07:19 | Martin Surkovsky | Noted that ADR 0005 embeds `experimental/` the same way, so this no longer reads as skills-only |
+| 2026-09-24 07:20 | Martin Surkovsky | Created |

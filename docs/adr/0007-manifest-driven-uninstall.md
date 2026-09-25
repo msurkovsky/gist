@@ -143,3 +143,10 @@ nothing on disk) with no I/O. `tests/cli.rs` end-to-end:
 `a_file_found_already_identical_is_recorded_and_later_uninstalled`.
 `init_claude_writes_a_manifest_after_install` also asserts `gk_version`. The
 tests for untrusted manifests and symlinks are listed in ADR 0008.
+
+## Changelog
+
+| When | Who | Why |
+|---|---|---|
+| 2026-09-24 23:14 | Martin Surkovsky | Renamed a listed test to match what it checks |
+| 2026-09-24 19:57 | Martin Surkovsky | Created |

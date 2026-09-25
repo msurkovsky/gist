@@ -81,3 +81,10 @@ depends on that.
 `scripts/check.sh` fails when `scripts/vendor.sh check` finds a non-merge
 first-parent commit touching `experimental/`. `just vendor update` on an
 unchanged upstream reports `up to date` and creates no commit.
+
+## Changelog
+
+| When | Who | Why |
+|---|---|---|
+| 2026-09-25 07:19 | Martin Surkovsky | Noted that `gk init --experimental` (ADR 0005) made a view no longer the only way to try a vendored skill |
+| 2026-09-24 18:15 | Martin Surkovsky | Created |

@@ -206,3 +206,10 @@ not exist would block every commit.
 also checked by mutation: with the atomic write swapped for a plain `fs::write`
 it fails. The `could not inspect` and `could not remove` error arms have no
 test, for the reason ADR 0008 gives: they need an unreadable directory.
+
+## Changelog
+
+| When | Who | Why |
+|---|---|---|
+| 2026-09-25 18:53 | Martin Surkovsky | Removed `mrType` and `gist-mr-start`, which ADR 0011 dropped, so the ADR matches the hook |
+| 2026-09-25 06:51 | Martin Surkovsky | Created |

@@ -106,3 +106,10 @@ Old and new binaries, same ranges, same repository:
 | `HEAD~10..HEAD` | 123 doc / 198 code | identical |
 | `HEAD~30...HEAD` | 199 / 2331 | identical |
 | `HEAD~600..HEAD` | ratio 0.04099 | 0.04110 |
+
+## Changelog
+
+| When | Who | Why |
+|---|---|---|
+| 2026-09-25 07:19 | Martin Surkovsky | Noted that `gk hook` runs `git` directly (ADR 0009), so the scope reads as `gk doc` only |
+| 2026-09-23 20:12 | Martin Surkovsky | Created |

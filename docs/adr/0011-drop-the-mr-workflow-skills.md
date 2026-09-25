@@ -59,3 +59,10 @@ before this change leaves the old skill directories in place. The manifest still
 records them, since a run keeps entries outside its selection (ADR 0007), so
 `gk init --claude --uninstall` followed by `gk init --claude` removes them. A typed commit convention still works through `mr.commitPattern`,
 but nothing holds a branch to one type any more.
+
+## Changelog
+
+| When | Who | Why |
+|---|---|---|
+| 2026-09-25 18:53 | Martin Surkovsky | Dropped the supersedes note on ADR 0009, which now states its current decision itself |
+| 2026-09-25 07:26 | Martin Surkovsky | Created |

@@ -75,3 +75,10 @@ the list of packages that do, per the "never guessed" rule in `CLAUDE.md`.
 `tests/cli.rs`). `rewrite_skill_name` has unit tests in `init.rs`: it replaces
 only the frontmatter line, keeps a missing trailing newline missing, and errors
 rather than guessing on an absent line or non-UTF-8 input.
+
+## Changelog
+
+| When | Who | Why |
+|---|---|---|
+| 2026-09-24 23:13 | Martin Surkovsky | Listed the tests added for behaviours that mutation testing showed nothing pinned |
+| 2026-09-24 18:28 | Martin Surkovsky | Created |
