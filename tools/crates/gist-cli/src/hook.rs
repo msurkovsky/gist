@@ -318,10 +318,6 @@ struct Project {
     regex: Regex,
     /// The pattern as written, for the error message.
     source: String,
-    /// Empty on a detached HEAD, which has no branch to hold a type for.
-    branch: String,
-    /// The type `branch.<name>.mrType` fixes this branch to, or empty.
-    fixed_type: String,
 }
 
 struct Rules {
@@ -350,25 +346,7 @@ fn read_project() -> Result<Option<Project>, String> {
     }
     let regex = Regex::new(&source)
         .map_err(|err| format!("mr.commitPattern is not a valid pattern: {err}"))?;
-
-    let head = lookup(&["symbolic-ref", "--short", "-q", "HEAD"])
-        .map_err(|err| format!("could not read the current branch: {err}"))?
-        .unwrap_or_default();
-    // Any lookup failure here means no fixed type, as an unset key does.
-    let fixed_type = if head.is_empty() {
-        String::new()
-    } else {
-        lookup(&["config", "--get", &format!("branch.{head}.mrType")])
-            .ok()
-            .flatten()
-            .unwrap_or_default()
-    };
-    Ok(Some(Project {
-        regex,
-        source,
-        branch: head,
-        fixed_type,
-    }))
+    Ok(Some(Project { regex, source }))
 }
 
 fn read_rules() -> Result<Rules, String> {
@@ -447,15 +425,10 @@ fn check(lines: &[&str], rules: &Rules) -> Result<Vec<String>, String> {
     }
 
     if let Some(project) = &rules.project {
-        let captures = project
-            .regex
-            .captures(subject)
-            .ok_or_else(|| format!("project requires subject matching {}", project.source))?;
-        let kind = captures.get(1).map_or("", |m| m.as_str());
-        if !kind.is_empty() && !project.fixed_type.is_empty() && kind != project.fixed_type {
+        if !project.regex.is_match(subject) {
             return Err(format!(
-                "branch {} is fixed to type '{}', got '{kind}'; one type per branch",
-                project.branch, project.fixed_type
+                "project requires subject matching {}",
+                project.source
             ));
         }
     }

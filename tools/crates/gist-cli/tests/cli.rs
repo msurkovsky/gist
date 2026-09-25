@@ -1651,23 +1651,6 @@ fn commit_msg_enforces_a_project_pattern_and_drops_the_uppercase_rule() {
 }
 
 #[test]
-fn commit_msg_holds_a_branch_to_one_type_even_before_its_first_commit() {
-    let repo = Repo::new();
-    repo.set_config("mr.commitPattern", PROJECT_PATTERN);
-    repo.set_config("branch.main.mrType", "fix");
-
-    let (code, _, stderr) = repo.check_message("feat(AB-1): add thing\n");
-    assert_eq!(code, 1);
-    assert!(
-        stderr.contains("fixed to type 'fix', got 'feat'"),
-        "{stderr}"
-    );
-
-    let (code, _, stderr) = repo.check_message("fix(AB-1): repair thing\n");
-    assert_eq!(code, 0, "{stderr}");
-}
-
-#[test]
 fn commit_msg_fails_loudly_on_a_pattern_that_does_not_compile() {
     let repo = Repo::new();
     repo.set_config("mr.commitPattern", "(");
