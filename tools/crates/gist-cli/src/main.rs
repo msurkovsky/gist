@@ -4,11 +4,12 @@
 //! defaults lean that way: no prompts, no spinners, bounded output.
 
 mod doc;
+mod hook;
 mod init;
 mod outline;
 
 use clap::{Parser, Subcommand};
-use gist_core::{emit, emit_status, exit, fail};
+use gist_core::{emit, emit_status, exit, fail, Human};
 use std::path::PathBuf;
 use std::process::ExitCode;
 
@@ -50,6 +51,9 @@ enum Command {
     /// Vendor this project's skills for Claude Code and/or Codex CLI, or
     /// remove them with --uninstall
     Init(init::Args),
+
+    /// Install the git hooks gk provides, or run one
+    Hook(hook::Args),
 }
 
 fn main() -> ExitCode {
@@ -75,6 +79,25 @@ fn main() -> ExitCode {
                 emit_status(report, code, cli.json)
             })
             .map_err(|message| fail(message, exit::FAILURE, cli.json)),
+        // A hook's advice goes to stderr and is empty on most commits: git
+        // shows a hook's output to the person committing, every time.
+        Command::Hook(args) => hook::run(args)
+            .map(|report| {
+                if report.is_diagnostic() && !cli.json {
+                    let text = report.human();
+                    if !text.is_empty() {
+                        eprintln!("{text}");
+                    }
+                    return ExitCode::from(exit::OK);
+                }
+                let code = if report.is_failure() {
+                    exit::FAILURE
+                } else {
+                    exit::OK
+                };
+                emit_status(report, code, cli.json)
+            })
+            .map_err(|message| fail(message, exit::FAILURE, cli.json)),
     };
 
     match result {
@@ -86,6 +109,18 @@ fn main() -> ExitCode {
 mod tests {
     use super::Cli;
     use clap::CommandFactory;
+
+    #[test]
+    fn every_installable_hook_has_a_subcommand_to_run() {
+        let cli = Cli::command();
+        let hook = cli.find_subcommand("hook").expect("gk hook");
+        for name in crate::hook::HOOKS {
+            assert!(
+                hook.find_subcommand(name).is_some(),
+                "`gk hook install` writes a shim for {name}, but `gk hook {name}` does not exist"
+            );
+        }
+    }
 
     #[test]
     fn the_command_line_definition_is_internally_consistent() {

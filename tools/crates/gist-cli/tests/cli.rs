@@ -33,6 +33,8 @@ impl Repo {
         let output = Command::new("git")
             .args(args)
             .current_dir(self.path())
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_CONFIG_NOSYSTEM", "1")
             .output()
             .expect("run git");
         assert!(
@@ -59,16 +61,7 @@ impl Repo {
 
     /// Run `gk` inside the repo and return (exit code, stdout, stderr).
     fn gk(&self, args: &[&str]) -> (i32, String, String) {
-        let output = Command::new(env!("CARGO_BIN_EXE_gk"))
-            .args(args)
-            .current_dir(self.path())
-            .output()
-            .expect("run gk");
-        (
-            output.status.code().unwrap_or(-1),
-            String::from_utf8_lossy(&output.stdout).into_owned(),
-            String::from_utf8_lossy(&output.stderr).into_owned(),
-        )
+        gk_isolated(self.path(), args)
     }
 
     fn gk_json(&self, args: &[&str]) -> (i32, String, String) {
@@ -1311,5 +1304,682 @@ fn a_renamed_file_counts_only_what_changed_in_it() {
     assert_eq!(
         data["totals"]["doc"], 2,
         "only the added comment run counts"
+    );
+}
+
+// ---- gk hook (docs/adr/0009-install-git-hooks-with-gk.md) ----
+
+/// Run `gk` in `dir` with the user's global and system git config out of the
+/// way, so a `core.hooksPath` or `commit.subjectMax` on the developer's
+/// machine cannot change what any test sees.
+fn gk_isolated(dir: &Path, args: &[&str]) -> (i32, String, String) {
+    let output = Command::new(env!("CARGO_BIN_EXE_gk"))
+        .args(args)
+        .current_dir(dir)
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .output()
+        .expect("run gk");
+    (
+        output.status.code().unwrap_or(-1),
+        String::from_utf8_lossy(&output.stdout).into_owned(),
+        String::from_utf8_lossy(&output.stderr).into_owned(),
+    )
+}
+
+/// The current PATH with the directory holding the built `gk` in front, which
+/// is what an installed shim needs to find it.
+fn path_with_gk() -> std::ffi::OsString {
+    let gk_dir = Path::new(env!("CARGO_BIN_EXE_gk"))
+        .parent()
+        .expect("gk has a parent directory")
+        .to_path_buf();
+    let mut paths = vec![gk_dir];
+    paths.extend(std::env::split_paths(
+        &std::env::var_os("PATH").unwrap_or_default(),
+    ));
+    std::env::join_paths(paths).expect("join PATH")
+}
+
+impl Repo {
+    fn hook_file(&self) -> std::path::PathBuf {
+        self.path().join(".git/hooks/commit-msg")
+    }
+
+    /// Real git, isolated, with `gk` on PATH; the outcome is returned, not asserted.
+    fn git_hooked(&self, args: &[&str]) -> Output {
+        Command::new("git")
+            .args(args)
+            .current_dir(self.path())
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("PATH", path_with_gk())
+            .output()
+            .expect("run git")
+    }
+
+    /// Put `message` in a file and run the commit-msg check on it.
+    fn check_message(&self, message: &str) -> (i32, String, String) {
+        let file = self.path().join(".git/MESSAGE_UNDER_TEST");
+        std::fs::write(&file, message).expect("write message");
+        self.gk(&["hook", "commit-msg", file.to_str().expect("utf-8 path")])
+    }
+
+    fn set_config(&self, key: &str, value: &str) {
+        self.git(&["config", key, value]);
+    }
+}
+
+const PROJECT_PATTERN: &str = r"^([a-z]+)\(([A-Za-z]+-?[0-9]+)\): .+";
+
+#[test]
+fn commit_msg_accepts_the_generic_style_and_says_nothing() {
+    let repo = Repo::new();
+    let (code, stdout, stderr) = repo.check_message("Add thing\n\nBecause it was missing.\n");
+    assert_eq!((code, stdout.as_str(), stderr.as_str()), (0, "", ""));
+}
+
+#[test]
+fn commit_msg_rejects_a_lowercase_subject() {
+    let repo = Repo::new();
+    let (code, _, stderr) = repo.check_message("add thing\n");
+    assert_eq!(code, 1);
+    assert!(stderr.contains("uppercase"), "{stderr}");
+}
+
+#[test]
+fn commit_msg_accepts_a_non_ascii_capital() {
+    let repo = Repo::new();
+    let (code, _, stderr) = repo.check_message("Šablona pro zprávu\n");
+    assert_eq!(code, 0, "{stderr}");
+}
+
+#[test]
+fn commit_msg_rejects_a_trailing_period() {
+    let repo = Repo::new();
+    let (code, _, stderr) = repo.check_message("Add thing.\n");
+    assert_eq!(code, 1);
+    assert!(stderr.contains("period"), "{stderr}");
+}
+
+#[test]
+fn commit_msg_rejects_an_empty_subject() {
+    let repo = Repo::new();
+    let (code, _, stderr) = repo.check_message("# nothing but a comment\n");
+    assert_eq!(code, 1);
+    assert!(stderr.contains("empty subject"), "{stderr}");
+}
+
+#[test]
+fn commit_msg_ignores_comment_lines() {
+    let repo = Repo::new();
+    let long_comment = format!("# {}", "a comment git strips anyway ".repeat(5));
+    let (code, _, stderr) = repo.check_message(&format!("Add thing\n\n{long_comment}\n"));
+    assert_eq!(code, 0, "{stderr}");
+}
+
+#[test]
+fn commit_msg_requires_a_blank_second_line() {
+    let repo = Repo::new();
+    let (code, _, stderr) = repo.check_message("Add thing\nno blank line\n");
+    assert_eq!(code, 1);
+    assert!(stderr.contains("line 2 must be blank"), "{stderr}");
+}
+
+#[test]
+fn commit_msg_limits_the_subject_to_72_characters() {
+    let repo = Repo::new();
+    let (code, _, stderr) = repo.check_message(&format!("A{}\n", "x".repeat(71)));
+    assert_eq!(code, 0, "72 characters is allowed: {stderr}");
+
+    let (code, _, stderr) = repo.check_message(&format!("A{}\n", "x".repeat(72)));
+    assert_eq!(code, 1);
+    assert!(stderr.contains("73 chars, max 72"), "{stderr}");
+}
+
+#[test]
+fn commit_msg_notes_a_subject_over_50_characters_without_rejecting_it() {
+    let repo = Repo::new();
+    let (code, stdout, stderr) = repo.check_message(&format!("A{}\n", "x".repeat(59)));
+    assert_eq!(code, 0);
+    assert!(stderr.contains("under 50 reads better"), "{stderr}");
+    assert_eq!(stdout, "", "advice is a diagnostic, not the result");
+}
+
+#[test]
+fn commit_msg_limits_body_lines_to_72_characters() {
+    let repo = Repo::new();
+    let (code, _, stderr) = repo.check_message(&format!("Add thing\n\n{}\n", "x".repeat(73)));
+    assert_eq!(code, 1);
+    assert!(
+        stderr.contains("body line 3 is 73 chars, max 72"),
+        "{stderr}"
+    );
+}
+
+#[test]
+fn commit_msg_exempts_urls_trailers_and_indented_lines_from_the_body_limit() {
+    let repo = Repo::new();
+    let long = "x".repeat(80);
+    for line in [
+        format!("See https://example.com/{long}"),
+        format!("Co-Authored-By: {long}"),
+        format!("    {long}"),
+    ] {
+        let (code, _, stderr) = repo.check_message(&format!("Add thing\n\n{line}\n"));
+        assert_eq!(code, 0, "{line}: {stderr}");
+    }
+}
+
+#[test]
+fn commit_msg_counts_characters_not_bytes() {
+    let repo = Repo::new();
+    let (code, _, stderr) = repo.check_message(&format!("Add thing\n\n{}\n", "—".repeat(40)));
+    assert_eq!(code, 0, "40 characters is 120 bytes: {stderr}");
+
+    let (code, _, stderr) = repo.check_message(&format!("Add thing\n\n{}\n", "—".repeat(73)));
+    assert_eq!(code, 1);
+    assert!(stderr.contains("73 chars"), "{stderr}");
+}
+
+#[test]
+fn commit_msg_exempts_merge_fixup_squash_and_revert() {
+    let repo = Repo::new();
+    for subject in [
+        "Merge branch 'x'.",
+        "fixup! add thing.",
+        "squash! add thing.",
+        "Revert \"Add thing\".",
+    ] {
+        let (code, _, stderr) = repo.check_message(&format!("{subject}\n"));
+        assert_eq!(code, 0, "{subject}: {stderr}");
+    }
+}
+
+#[test]
+fn commit_msg_honours_the_configured_limits() {
+    let repo = Repo::new();
+    repo.set_config("commit.subjectMax", "20");
+    let (code, _, stderr) = repo.check_message(&format!("A{}\n", "x".repeat(20)));
+    assert_eq!(code, 1);
+    assert!(stderr.contains("max 20"), "{stderr}");
+
+    repo.set_config("commit.bodyMax", "30");
+    let (code, _, stderr) = repo.check_message(&format!("Add thing\n\n{}\n", "x".repeat(31)));
+    assert_eq!(code, 1);
+    assert!(stderr.contains("max 30"), "{stderr}");
+}
+
+#[test]
+fn commit_msg_fails_loudly_on_a_limit_that_is_not_a_number() {
+    let repo = Repo::new();
+    repo.set_config("commit.subjectMax", "many");
+    let (code, _, stderr) = repo.check_message("Add thing\n");
+    assert_eq!(code, 1);
+    assert!(stderr.contains("commit.subjectMax"), "{stderr}");
+}
+
+#[test]
+fn commit_msg_enforces_a_project_pattern_and_drops_the_uppercase_rule() {
+    let repo = Repo::new();
+    repo.set_config("mr.commitPattern", PROJECT_PATTERN);
+
+    let (code, _, stderr) = repo.check_message("feat(AB-12): add thing\n");
+    assert_eq!(code, 0, "{stderr}");
+
+    let (code, _, stderr) = repo.check_message("Add thing\n");
+    assert_eq!(code, 1);
+    assert!(
+        stderr.contains("project requires subject matching"),
+        "{stderr}"
+    );
+}
+
+#[test]
+fn commit_msg_holds_a_branch_to_one_type_even_before_its_first_commit() {
+    let repo = Repo::new();
+    repo.set_config("mr.commitPattern", PROJECT_PATTERN);
+    repo.set_config("branch.main.mrType", "fix");
+
+    let (code, _, stderr) = repo.check_message("feat(AB-1): add thing\n");
+    assert_eq!(code, 1);
+    assert!(
+        stderr.contains("fixed to type 'fix', got 'feat'"),
+        "{stderr}"
+    );
+
+    let (code, _, stderr) = repo.check_message("fix(AB-1): repair thing\n");
+    assert_eq!(code, 0, "{stderr}");
+}
+
+#[test]
+fn commit_msg_fails_loudly_on_a_pattern_that_does_not_compile() {
+    let repo = Repo::new();
+    repo.set_config("mr.commitPattern", "(");
+    let (code, _, stderr) = repo.check_message("Add thing\n");
+    assert_eq!(code, 1);
+    assert!(stderr.contains("mr.commitPattern"), "{stderr}");
+}
+
+#[test]
+fn commit_msg_reports_a_message_file_it_cannot_read() {
+    let repo = Repo::new();
+    let (code, _, stderr) = repo.gk(&["hook", "commit-msg", "no-such-file"]);
+    assert_eq!(code, 1);
+    assert!(stderr.contains("could not read"), "{stderr}");
+}
+
+#[test]
+fn commit_msg_speaks_the_json_envelope() {
+    let repo = Repo::new();
+    let file = repo.path().join(".git/MESSAGE_UNDER_TEST");
+    let file = file.to_str().expect("utf-8 path");
+
+    std::fs::write(file, "Add thing\n").expect("write");
+    let (code, data) = repo.data_with_code(&["hook", "commit-msg", file]);
+    assert_eq!(code, 0);
+    assert_eq!(data["notes"], serde_json::json!([]));
+
+    std::fs::write(file, "add thing\n").expect("write");
+    let (code, _, stderr) = repo.gk(&["hook", "commit-msg", file, "--json"]);
+    assert_eq!(code, 1);
+    let envelope: Value = serde_json::from_str(&stderr).expect("error envelope on stderr");
+    assert_eq!(envelope["status"], "error");
+}
+
+#[test]
+fn install_writes_an_executable_shim_that_git_runs() {
+    use std::os::unix::fs::PermissionsExt;
+    let repo = Repo::new();
+    let (code, stdout, stderr) = repo.gk(&["hook", "install"]);
+    assert_eq!(code, 0, "{stdout}{stderr}");
+
+    let hook = repo.hook_file();
+    let mode = std::fs::metadata(&hook)
+        .expect("hook exists")
+        .permissions()
+        .mode();
+    assert_eq!(mode & 0o777, 0o755);
+    let text = std::fs::read_to_string(&hook).expect("read hook");
+    assert!(
+        text.starts_with("#!/bin/sh\n# gk-hook: commit-msg\n"),
+        "{text}"
+    );
+
+    let bad = repo.git_hooked(&[
+        "commit",
+        "--allow-empty",
+        "-q",
+        "-m",
+        "lowercase with period.",
+    ]);
+    assert!(!bad.status.success(), "git accepted a bad subject");
+    assert!(
+        String::from_utf8_lossy(&bad.stderr).contains("uppercase"),
+        "{}",
+        String::from_utf8_lossy(&bad.stderr)
+    );
+
+    let good = repo.git_hooked(&["commit", "--allow-empty", "-q", "-m", "Add a thing"]);
+    assert!(
+        good.status.success(),
+        "{}",
+        String::from_utf8_lossy(&good.stderr)
+    );
+}
+
+#[test]
+fn install_reports_json_and_a_second_run_changes_nothing() {
+    let repo = Repo::new();
+    let (code, data) = repo.data_with_code(&["hook", "install"]);
+    assert_eq!(code, 0);
+    assert_eq!(data["hooks"][0]["name"], "commit-msg");
+    assert_eq!(data["hooks"][0]["status"], "installed");
+    assert!(
+        data["directory"]
+            .as_str()
+            .expect("directory")
+            .ends_with(".git/hooks"),
+        "{data}"
+    );
+    let before = std::fs::read(repo.hook_file()).expect("read");
+
+    let (code, data) = repo.data_with_code(&["hook", "install"]);
+    assert_eq!(code, 0);
+    assert_eq!(data["hooks"][0]["status"], "unchanged");
+    assert_eq!(std::fs::read(repo.hook_file()).expect("read"), before);
+}
+
+#[test]
+fn install_leaves_a_hook_that_is_not_gks_alone_unless_forced() {
+    let repo = Repo::new();
+    let mine = "#!/bin/sh\n# my own check\nexit 0\n";
+    std::fs::create_dir_all(repo.path().join(".git/hooks")).expect("hooks dir");
+    std::fs::write(repo.hook_file(), mine).expect("write hook");
+
+    let (code, data) = repo.data_with_code(&["hook", "install"]);
+    assert_eq!(code, 1);
+    assert_eq!(data["hooks"][0]["status"], "conflict");
+    assert_eq!(
+        std::fs::read_to_string(repo.hook_file()).expect("read"),
+        mine
+    );
+
+    let (code, data) = repo.data_with_code(&["hook", "install", "--force"]);
+    assert_eq!(code, 0);
+    assert_eq!(data["hooks"][0]["status"], "overwritten");
+    assert!(std::fs::read_to_string(repo.hook_file())
+        .expect("read")
+        .contains("# gk-hook: commit-msg"));
+}
+
+#[test]
+fn install_rewrites_its_own_stale_shim_without_force() {
+    let repo = Repo::new();
+    std::fs::create_dir_all(repo.path().join(".git/hooks")).expect("hooks dir");
+    std::fs::write(
+        repo.hook_file(),
+        "#!/bin/sh\n# gk-hook: commit-msg\nexec an-older-gk \"$@\"\n",
+    )
+    .expect("write hook");
+
+    let (code, data) = repo.data_with_code(&["hook", "install"]);
+    assert_eq!(code, 0);
+    assert_eq!(data["hooks"][0]["status"], "overwritten");
+    assert!(std::fs::read_to_string(repo.hook_file())
+        .expect("read")
+        .contains("exec gk hook commit-msg"));
+}
+
+#[test]
+fn install_replaces_a_symlink_only_when_forced_and_never_writes_through_it() {
+    let repo = Repo::new();
+    let elsewhere = TempDir::new().expect("temp dir");
+    let target = elsewhere.path().join("precious");
+    std::fs::write(&target, "precious\n").expect("write target");
+    std::fs::create_dir_all(repo.path().join(".git/hooks")).expect("hooks dir");
+    std::os::unix::fs::symlink(&target, repo.hook_file()).expect("symlink");
+
+    let (code, data) = repo.data_with_code(&["hook", "install"]);
+    assert_eq!(code, 1);
+    assert_eq!(data["hooks"][0]["status"], "conflict");
+    assert!(std::fs::symlink_metadata(repo.hook_file())
+        .expect("stat")
+        .file_type()
+        .is_symlink());
+
+    let (code, data) = repo.data_with_code(&["hook", "install", "--force"]);
+    assert_eq!(code, 0);
+    assert_eq!(data["hooks"][0]["status"], "overwritten");
+    assert!(
+        !std::fs::symlink_metadata(repo.hook_file())
+            .expect("stat")
+            .file_type()
+            .is_symlink(),
+        "the link should be replaced by a regular file"
+    );
+    assert_eq!(
+        std::fs::read_to_string(&target).expect("read target"),
+        "precious\n",
+        "what the link pointed at must not be written"
+    );
+}
+
+#[test]
+fn a_limit_given_with_git_dash_c_reaches_the_hook() {
+    let repo = Repo::new();
+    repo.gk(&["hook", "install"]);
+
+    let output = repo.git_hooked(&[
+        "-c",
+        "commit.subjectMax=10",
+        "commit",
+        "--allow-empty",
+        "-q",
+        "-m",
+        "A subject longer than ten",
+    ]);
+    assert!(!output.status.success(), "git -c was ignored by the hook");
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("max 10"),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn install_honours_a_global_hooks_path_that_git_honours() {
+    let repo = Repo::new();
+    let home = TempDir::new().expect("temp dir");
+    let global = home.path().join("gitconfig");
+    std::fs::write(&global, "[core]\n\thooksPath = shared-hooks\n").expect("write config");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_gk"))
+        .args(["hook", "install"])
+        .current_dir(repo.path())
+        .env("GIT_CONFIG_GLOBAL", &global)
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .output()
+        .expect("run gk");
+    assert_eq!(output.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("core.hooksPath"));
+    assert!(!repo.hook_file().exists());
+}
+
+#[test]
+fn install_ignores_a_home_gitconfig_that_git_is_told_to_ignore() {
+    let repo = Repo::new();
+    let home = TempDir::new().expect("temp dir");
+    std::fs::write(
+        home.path().join(".gitconfig"),
+        "[core]\n\thooksPath = shared-hooks\n",
+    )
+    .expect("write config");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_gk"))
+        .args(["hook", "install"])
+        .current_dir(repo.path())
+        .env("HOME", home.path())
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .output()
+        .expect("run gk");
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(repo.hook_file().exists());
+}
+
+#[test]
+fn a_sha256_repository_installs_and_checks_messages() {
+    let dir = TempDir::new().expect("temp dir");
+    let init = Command::new("git")
+        .args(["init", "-q", "--object-format=sha256"])
+        .current_dir(dir.path())
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .output()
+        .expect("run git");
+    if !init.status.success() {
+        return; // a git too old to make sha256 repositories
+    }
+
+    let (code, stdout, stderr) = gk_isolated(dir.path(), &["hook", "install"]);
+    assert_eq!(code, 0, "{stdout}{stderr}");
+
+    let message = dir.path().join(".git/MESSAGE_UNDER_TEST");
+    std::fs::write(&message, "add thing.\n").expect("write message");
+    let (code, _, stderr) = gk_isolated(
+        dir.path(),
+        &["hook", "commit-msg", message.to_str().expect("utf-8 path")],
+    );
+    assert_eq!(code, 1);
+    assert!(stderr.contains("uppercase"), "{stderr}");
+}
+
+#[test]
+fn install_repairs_a_shim_that_lost_its_executable_bit() {
+    use std::os::unix::fs::PermissionsExt;
+    let repo = Repo::new();
+    repo.gk(&["hook", "install"]);
+    std::fs::set_permissions(repo.hook_file(), std::fs::Permissions::from_mode(0o644))
+        .expect("chmod");
+
+    let (code, data) = repo.data_with_code(&["hook", "install"]);
+    assert_eq!(code, 0);
+    assert_eq!(data["hooks"][0]["status"], "overwritten");
+    let mode = std::fs::metadata(repo.hook_file())
+        .expect("stat")
+        .permissions()
+        .mode();
+    assert_eq!(mode & 0o777, 0o755);
+}
+
+#[test]
+fn install_reports_a_hook_path_it_cannot_read_and_leaves_it_alone() {
+    let repo = Repo::new();
+    std::fs::create_dir_all(repo.hook_file()).expect("a directory where the hook goes");
+
+    let (code, _, stderr) = repo.gk(&["hook", "install"]);
+    assert_eq!(code, 1);
+    assert!(stderr.contains("could not read"), "{stderr}");
+    assert!(repo.hook_file().is_dir());
+}
+
+#[test]
+fn install_refuses_when_core_hooks_path_is_set() {
+    let repo = Repo::new();
+    repo.set_config("core.hooksPath", "shared-hooks");
+
+    let (code, _, stderr) = repo.gk(&["hook", "install"]);
+    assert_eq!(code, 1);
+    assert!(stderr.contains("core.hooksPath"), "{stderr}");
+    assert!(!repo.hook_file().exists());
+    assert!(!repo.path().join("shared-hooks").exists());
+}
+
+#[test]
+fn install_from_a_linked_worktree_writes_the_shared_hooks_directory() {
+    let repo = Repo::new();
+    repo.write("a.txt", "x\n");
+    repo.commit("base");
+    let elsewhere = TempDir::new().expect("temp dir");
+    let tree = elsewhere.path().join("tree");
+    repo.git(&[
+        "worktree",
+        "add",
+        "-q",
+        tree.to_str().expect("utf-8"),
+        "-b",
+        "side",
+    ]);
+
+    let (code, stdout, stderr) = gk_isolated(&tree, &["hook", "install"]);
+    assert_eq!(code, 0, "{stdout}{stderr}");
+    assert!(repo.hook_file().exists(), "the main repo's hooks directory");
+}
+
+#[test]
+fn install_outside_a_repository_is_an_expected_failure() {
+    let dir = TempDir::new().expect("temp dir");
+    let (code, _, stderr) = gk_isolated(dir.path(), &["hook", "install"]);
+    assert_eq!(code, 1);
+    assert!(stderr.contains("error"), "{stderr}");
+}
+
+#[test]
+fn uninstall_removes_a_shim_and_keeps_a_file_that_is_not_gks() {
+    let repo = Repo::new();
+    repo.gk(&["hook", "install"]);
+
+    let (code, data) = repo.data_with_code(&["hook", "install", "--uninstall"]);
+    assert_eq!(code, 0);
+    assert_eq!(data["hooks"][0]["status"], "removed");
+    assert!(!repo.hook_file().exists());
+
+    let (code, data) = repo.data_with_code(&["hook", "install", "--uninstall"]);
+    assert_eq!(code, 0, "nothing there is not a failure");
+    assert_eq!(data["hooks"][0]["status"], "missing");
+
+    let mine = "#!/bin/sh\nexit 0\n";
+    std::fs::write(repo.hook_file(), mine).expect("write hook");
+    let (code, data) = repo.data_with_code(&["hook", "install", "--uninstall"]);
+    assert_eq!(code, 1);
+    assert_eq!(data["hooks"][0]["status"], "kept");
+    assert_eq!(
+        std::fs::read_to_string(repo.hook_file()).expect("read"),
+        mine
+    );
+}
+
+#[test]
+fn uninstall_still_cleans_the_default_directory_when_core_hooks_path_is_set() {
+    let repo = Repo::new();
+    repo.gk(&["hook", "install"]);
+    repo.set_config("core.hooksPath", "shared-hooks");
+
+    let (code, data) = repo.data_with_code(&["hook", "install", "--uninstall"]);
+    assert_eq!(code, 0);
+    assert_eq!(data["hooks"][0]["status"], "removed");
+    assert!(!repo.hook_file().exists());
+}
+
+#[test]
+fn force_with_uninstall_is_misuse() {
+    let repo = Repo::new();
+    let (code, _, _) = repo.gk(&["hook", "install", "--uninstall", "--force"]);
+    assert_eq!(code, 2);
+}
+
+#[test]
+fn the_installed_shim_says_so_when_gk_is_not_on_path() {
+    let repo = Repo::new();
+    repo.gk(&["hook", "install"]);
+    let message = repo.path().join(".git/MESSAGE_UNDER_TEST");
+    std::fs::write(&message, "Add thing\n").expect("write message");
+
+    let output = Command::new("/bin/sh")
+        .arg(repo.hook_file())
+        .arg(&message)
+        .env("PATH", "/nonexistent")
+        .output()
+        .expect("run shim");
+    assert_eq!(output.status.code(), Some(1));
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("gk is not on PATH"),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn the_old_commit_msg_script_only_forwards_to_gk() {
+    let repo = Repo::new();
+    let script = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../hooks/commit-msg.sh");
+    let message = repo.path().join(".git/MESSAGE_UNDER_TEST");
+    let run = |text: &str, path: std::ffi::OsString| {
+        std::fs::write(&message, text).expect("write message");
+        Command::new("/bin/bash")
+            .arg(&script)
+            .arg(&message)
+            .current_dir(repo.path())
+            .env("PATH", path)
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .output()
+            .expect("run script")
+    };
+
+    let bad = run("add thing.\n", path_with_gk());
+    assert_eq!(bad.status.code(), Some(1), "gk enforces through the script");
+
+    let no_gk = TempDir::new().expect("temp dir");
+    let without_gk = run("Add thing\n", no_gk.path().into());
+    assert!(
+        !without_gk.status.success(),
+        "with no gk on PATH the script has nothing to enforce with, and must say so"
     );
 }

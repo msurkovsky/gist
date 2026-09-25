@@ -15,6 +15,7 @@ clap = { workspace = true }
 git2 = { workspace = true }
 ignore = { workspace = true }
 include_dir = { workspace = true }
+regex = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }

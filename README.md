@@ -16,7 +16,7 @@ skills/         the product — one directory per skill, embedded into gk
 experimental/   third-party skill repos vendored with full history, never edited here
 languages/      everything language-bound, one adapter per language; skills stay agnostic
 rules/          always-on constraints to drop into a project's CLAUDE.md or .claude/rules/
-hooks/          deterministic guards: a git commit-msg hook and a Claude Code hook
+hooks/          deterministic guards: a Claude Code hook, and a forwarder for the old commit-msg link
 views/          Josh workspaces — what a consumer sees of this repo
 tools/          cargo workspace; builds the gk binary
 scripts/        repo glue: vendoring, local symlinks, the consistency check
@@ -152,11 +152,13 @@ missing. Nothing is pre-seeded; a language is added when a project needs it, by 
 
 ## Hooks
 
-- `hooks/commit-msg.sh`: git hook. Short subject (72 max, note above 50), uppercase
-  start, no trailing period, blank line, body wrapped at 72. A project with a typed
-  convention opts in with `git config mr.commitPattern '<regex>'`, and pins one type per
-  branch with `git config branch.<name>.mrType`. Install per repo:
-  `ln -sf <this repo>/hooks/commit-msg.sh .git/hooks/commit-msg`.
+- `gk hook commit-msg`: git commit-msg hook. Short subject (72 max, note above 50),
+  uppercase start, no trailing period, blank line, body wrapped at 72. A project with a
+  typed convention opts in with `git config mr.commitPattern '<regex>'` (a Rust regex),
+  and pins one type per branch with `git config branch.<name>.mrType`. Install per repo
+  with `gk hook install`, which needs `gk` on PATH; `gk hook install --uninstall` removes
+  it. It refuses when `core.hooksPath` is set. A repo that symlinked the old
+  `hooks/commit-msg.sh` runs `gk hook install --force` once to replace the link.
 - `hooks/post-rebase-nag.sh`: Claude Code `PostToolUse` hook on `Bash`. After a rebase,
   prints the re-install, regenerate, retest reminder. Wire it in `settings.json`; the
   snippet is in the file header.

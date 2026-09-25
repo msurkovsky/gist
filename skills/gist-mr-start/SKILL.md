@@ -49,12 +49,16 @@ git config branch.<branch>.mrType <type>
 ```
 
 The `commit-msg` hook from gist enforces the generic style everywhere and the typed
-pattern where `mr.commitPattern` is set. Offer to install it if `.git/hooks/commit-msg` is
-absent:
+pattern where `mr.commitPattern` is set. Offer to install it. It needs `gk` on PATH, and
+running it again is harmless:
 
 ```
-ln -sf <gist>/hooks/commit-msg.sh .git/hooks/commit-msg
+gk hook install
 ```
+
+If it reports a conflict, a hook of the user's own or the old symlink is already there:
+show it and ask before rerunning with `--force`. If it refuses because `core.hooksPath` is
+set, say so and leave hooks to whatever manages that path.
 
 ## 4. State the rules for this branch
 

@@ -26,7 +26,9 @@ Skills are the product. Tools exist to serve them. `README.md` has the layout,
 - `rules/` — always-on constraints, language-agnostic. A rule that holds for one
   project only belongs in that project, not here.
 - `hooks/` — deterministic guards. Prefer a hook over a rule once the rule has
-  been broken more than once.
+  been broken more than once. Git hooks are `gk hook <name>` subcommands and
+  `gk hook install` puts them in a repo (`docs/adr/0009`); `hooks/` keeps the
+  Claude Code hook and a forwarder for the old commit-msg symlink.
 - `views/<consumer>/workspace.josh` — must be committed here before the consumer
   runs `josh clone`. Cloning a path that does not exist yet fails.
 - `tools/` — cargo workspace. `gist-core` holds shared output plumbing,
@@ -48,7 +50,7 @@ past that, port it to `gk` instead of growing the script. `scripts/` and
 `hooks/` still carry longer shell from before this rule; `TODO.md` tracks it.
 
 Shell is allowed in two places: `scripts/`, which only contributors run, and
-`hooks/`, which target repos install by symlink without `gk` on PATH. Keep both
+`hooks/`, which holds the Claude Code hook wired into `settings.json`. Keep both
 bash 3.2 compatible (macOS ships it): no `mapfile`, no `\|` in sed.
 
 Python is allowed for throwaway glue only: single file under a skill's
@@ -77,6 +79,6 @@ Without `just`: `cargo <cmd> --manifest-path tools/Cargo.toml`, `scripts/check.s
 - Commit subjects are plain imperative sentences, capitalised, under 50
   characters where possible, 72 hard limit, no trailing period, no
   conventional-commit prefix. Blank line, then a body wrapped at 72 that says
-  why. `hooks/commit-msg.sh` enforces it; install once with
-  `ln -sf ../../hooks/commit-msg.sh .git/hooks/commit-msg`. Typed conventions
+  why. `gk hook commit-msg` enforces it; install once with
+  `gk hook install`. Typed conventions
   like `feat(ID):` belong to individual projects, never here.

@@ -12,7 +12,7 @@ says how to do things. Run `just ci` before every commit.
 | `gk` subcommand | `tools/crates/gist-cli/` | us, read `docs/tool-contract.md` first |
 | Language-specific command | `languages/<lang>/toolchain.md` | us |
 | Always-on constraint | `rules/<topic>.md` | us |
-| Deterministic guard | `hooks/<name>.sh` | us |
+| Deterministic guard | `gk hook <name>` (git), `hooks/<name>.sh` (Claude Code) | us |
 | What a consumer sees | `views/<consumer>/workspace.josh` | us |
 | Decision worth not re-litigating | `docs/adr/NNNN-<slug>.md` | us |
 
@@ -87,10 +87,16 @@ one project, it belongs in that project's `CLAUDE.md` or `.claude/rules/`, not h
 
 ## Add a hook
 
-`hooks/<name>.sh`, executable, bash 3.2 compatible, with a header comment that states what
-it enforces and the exact install line or `settings.json` snippet. Prefer a hook over a
-rule whenever the rule has already been broken more than once. Add a smoke test line to
-`scripts/check.sh`.
+A git hook is a `gk hook <name>` subcommand in `tools/crates/gist-cli/src/hook.rs`: a
+`HookCommand` variant, an arm in `run`, and the name in `HOOKS`, which is what
+`gk hook install` writes shims for. A unit test fails if `HOOKS` names a hook with no
+subcommand. Add end-to-end tests in `tests/cli.rs` (see `docs/adr/0009`).
+
+A Claude Code hook is `hooks/<name>.sh`, executable, bash 3.2 compatible, with a header
+comment that states what it enforces and the exact `settings.json` snippet. Add a smoke
+test line to `scripts/check.sh`.
+
+Prefer a hook over a rule whenever the rule has already been broken more than once.
 
 ## Define a view
 
@@ -106,8 +112,8 @@ rule whenever the rule has already been broken more than once. Add a smoke test 
   conventional-commit prefix. Under 50 characters reads best, 72 is the hard limit.
 - Blank line, then a body that says why, not what. The diff shows what. Wrap at 72.
   A one-line change with an obvious reason needs no body.
-- `hooks/commit-msg.sh` enforces this. Install it here once:
-  `ln -sf ../../hooks/commit-msg.sh .git/hooks/commit-msg`.
+- `gk hook commit-msg` enforces this. Install it here once with `just install`
+  (puts `gk` on PATH) and `gk hook install`.
 - One concern per commit. Vendor imports and registry entries are separate commits by
   construction; do not fold other changes into them.
 - Run `just ci` first. It exits non-zero on any rule violation.

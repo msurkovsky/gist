@@ -70,7 +70,7 @@ pub enum Status {
 }
 
 impl Status {
-    fn label(self) -> &'static str {
+    pub(crate) fn label(self) -> &'static str {
         match self {
             Status::Installed => "installed",
             Status::Unchanged => "unchanged",
@@ -137,7 +137,7 @@ pub enum UninstallStatus {
 }
 
 impl UninstallStatus {
-    fn label(self) -> &'static str {
+    pub(crate) fn label(self) -> &'static str {
         match self {
             UninstallStatus::Removed => "removed",
             UninstallStatus::Kept => "kept",
@@ -758,9 +758,21 @@ fn write_manifest(root: &Path, entries: BTreeMap<ManifestPath, String>) -> Resul
         .map_err(|err| format!("could not serialize manifest: {err}"))?;
 
     let tmp = root.join(format!("{MANIFEST_FILENAME}.tmp"));
+    write_atomic(&path, &tmp, json.as_bytes(), false)
+}
+
+/// Write `contents` to `path` through `tmp` and rename it into place, so a
+/// crash never leaves a truncated file and a symlink at `path` is replaced,
+/// not followed.
+pub(crate) fn write_atomic(
+    path: &Path,
+    tmp: &Path,
+    contents: &[u8],
+    executable: bool,
+) -> Result<(), String> {
     // Leftover from a crashed run. `remove_file` drops a symlink itself,
     // never its target, and `create_new` below refuses to follow one.
-    match std::fs::remove_file(&tmp) {
+    match std::fs::remove_file(tmp) {
         Ok(()) => {}
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
         Err(err) => return Err(format!("could not remove {}: {err}", tmp.display())),
@@ -768,13 +780,31 @@ fn write_manifest(root: &Path, entries: BTreeMap<ManifestPath, String>) -> Resul
     let written = std::fs::OpenOptions::new()
         .write(true)
         .create_new(true)
-        .open(&tmp)
-        .and_then(|mut file| std::io::Write::write_all(&mut file, json.as_bytes()))
-        .and_then(|()| std::fs::rename(&tmp, &path));
+        .open(tmp)
+        .and_then(|mut file| std::io::Write::write_all(&mut file, contents))
+        .and_then(|()| {
+            if executable {
+                make_executable(tmp)
+            } else {
+                Ok(())
+            }
+        })
+        .and_then(|()| std::fs::rename(tmp, path));
     if written.is_err() {
-        let _ = std::fs::remove_file(&tmp);
+        let _ = std::fs::remove_file(tmp);
     }
     written.map_err(|err| format!("could not write {}: {err}", path.display()))
+}
+
+#[cfg(unix)]
+fn make_executable(path: &Path) -> std::io::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755))
+}
+
+#[cfg(not(unix))]
+fn make_executable(_path: &Path) -> std::io::Result<()> {
+    Ok(())
 }
 
 impl Human for Report {

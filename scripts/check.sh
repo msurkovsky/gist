@@ -12,7 +12,7 @@
 #   5. every languages/<lang>/toolchain.md has Detect and Verbs sections
 #   6. every skill is listed in README.md
 #   7. no local edits under experimental/ (scripts/vendor.sh check)
-#   8. hook smoke tests
+#   8. post-rebase-nag smoke tests (commit-msg is covered by tools/crates/gist-cli/tests/cli.rs)
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"; cd "$ROOT"
 fail=0
@@ -55,19 +55,7 @@ if [ -x scripts/vendor.sh ] && [ -d experimental ]; then
   [ "$out" = "clean: no local edits under experimental/" ] && ok "experimental/ untouched" || { bad "local edits under experimental/:"; printf '%s\n' "$out" | sed 's/^/      /'; }
 fi
 
-# 8  hook smoke tests
-t="$(mktemp)"
-printf 'Add thing\n\nBecause it was missing.\n' > "$t"; hooks/commit-msg.sh "$t" 2>/dev/null && ok "commit-msg accepts generic style" || bad "commit-msg rejects generic style"
-printf 'add thing.\n' > "$t"; hooks/commit-msg.sh "$t" 2>/dev/null && bad "commit-msg accepts lowercase with period" || ok "commit-msg rejects lowercase with period"
-printf 'Add thing\nno blank line\n' > "$t"; hooks/commit-msg.sh "$t" 2>/dev/null && bad "commit-msg accepts missing blank line" || ok "commit-msg rejects missing blank line"
-long="$(printf 'x%.0s' $(seq 1 80))"
-printf 'Add thing\n\n%s\n' "$long" > "$t"; hooks/commit-msg.sh "$t" 2>/dev/null && bad "commit-msg accepts a body line over 72" || ok "commit-msg rejects a body line over 72"
-printf 'Add thing\n\nSee https://example.com/%s\n' "$long" > "$t"; hooks/commit-msg.sh "$t" 2>/dev/null && ok "commit-msg exempts a long URL line" || bad "commit-msg rejects a long URL line"
-printf 'A%s\n' "$(printf 'x%.0s' $(seq 1 72))" > "$t"; hooks/commit-msg.sh "$t" 2>/dev/null && bad "commit-msg accepts a 73-char subject" || ok "commit-msg rejects a 73-char subject"
-printf 'Add thing\n\n%s\n' "$(printf '—%.0s' $(seq 1 40))" > "$t"; LC_ALL=C hooks/commit-msg.sh "$t" 2>/dev/null && ok "commit-msg counts characters, not bytes" || bad "commit-msg counts bytes in a byte locale"
-printf 'feat(ABC-1): add thing\n' > "$t"
-GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=mr.commitPattern GIT_CONFIG_VALUE_0='^([a-z]+)\(([A-Za-z]+-?[0-9]+)\): .+' hooks/commit-msg.sh "$t" 2>/dev/null && ok "commit-msg honours opt-in project pattern" || bad "commit-msg rejects opt-in pattern match"
-rm -f "$t"
+# 8  post-rebase-nag smoke tests
 echo '{"tool_input":{"command":"git pull --rebase origin main"}}' | hooks/post-rebase-nag.sh | grep -q 'Rebase detected' && ok "post-rebase-nag fires" || bad "post-rebase-nag silent on rebase"
 [ -z "$(echo '{"tool_input":{"command":"git rebase --abort"}}' | hooks/post-rebase-nag.sh)" ] && ok "post-rebase-nag silent on abort" || bad "post-rebase-nag fires on abort"
 echo 'not json' | hooks/post-rebase-nag.sh >/dev/null 2>&1 && bad "post-rebase-nag swallows unparseable input" || ok "post-rebase-nag fails on unparseable input"
