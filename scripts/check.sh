@@ -32,8 +32,9 @@ for f in skills/*/SKILL.md; do
   case "$d" in gist-*) ;; *) bad "$f: skill directories are prefixed gist- (docs/adr/0003)";; esac
 done
 
-# 4  language tool names must not appear in skills/ (word-bounded, case-sensitive)
-langtools='\b(npm|npx|pnpm|yarn|node_modules|tsc|eslint|vitest|jest|cargo|rustc|clippy|pytest|pip|uv sync|poetry|mypy|ruff|go test|go build|go vet|golangci|mvn|gradle|dotnet|ctest|cmake|clang-tidy|gcov|lcov\.info)\b'
+# 4  language tool names must not appear in skills/ (word-bounded, case-sensitive).
+# Boundaries are spelled out: \b is a GNU extension that BSD grep on macOS lacks.
+langtools='(^|[^A-Za-z0-9_])(npm|npx|pnpm|yarn|node_modules|tsc|eslint|vitest|jest|cargo|rustc|clippy|pytest|pip|uv sync|poetry|mypy|ruff|go test|go build|go vet|golangci|mvn|gradle|dotnet|ctest|cmake|clang-tidy|gcov|lcov\.info)($|[^A-Za-z0-9_])'
 hits="$(grep -rnE "$langtools" skills/ || true)"
 [ -z "$hits" ] && ok "skills/ free of language tool names" || { bad "language tool names under skills/ (move to languages/):"; printf '%s\n' "$hits" | sed 's/^/      /'; }
 
