@@ -10,7 +10,6 @@ says how to do things. Run `just ci` before every commit.
 | Workflow skill | `skills/gist-<name>/SKILL.md` | us, edit freely |
 | Third-party skill to try | `experimental/<vendor>/...` | upstream, never edited here |
 | `gk` subcommand | `tools/crates/gist-cli/` | us, read `docs/tool-contract.md` first |
-| Language-specific command | `languages/<lang>/toolchain.md` | us |
 | Always-on constraint | `rules/<topic>.md` | us |
 | Deterministic guard | `gk hook <name>` (git), `hooks/<name>.sh` (Claude Code) | us |
 | What a consumer sees | `views/<consumer>/workspace.josh` | us |
@@ -26,9 +25,8 @@ says how to do things. Run `just ci` before every commit.
    disable-model-invocation: true   # only for slash-command skills
    ---
    ```
-2. Keep it language-agnostic. Anything that needs a compiler, test runner, or package
-   manager is a call to the Skill tool with `gist-toolchain` and verbs. `scripts/check.sh`
-   greps for language tool names under `skills/` and fails on hits.
+2. Keep it language-agnostic. A skill that needs checks run points at the commands the
+   project's `CLAUDE.md` names; it never names a compiler or test runner itself.
 3. Reference other skills with `Call the Skill tool with "gist-<name>"`. No relative links
    into other skill folders. A user-invoked skill cannot be called this way; tell the user
    to run it.
@@ -62,15 +60,6 @@ just vendor list                             # registry with the imported upstre
 Needs `josh-filter` on PATH (README, section Composition). The script commits for you:
 one `Register vendor <name>` commit, then one merge per import. Add the vendor to the
 **Vendors** section of `README.md` with a one-line note on what is worth trying.
-
-## Add a language
-
-```
-cp -r languages/_template languages/<lang>
-```
-
-Fill `## Detect` with the manifest file names, then each verb with a command and how to
-read its output. A verb with no tool stays `none`. Nothing under `skills/` changes.
 
 ## Add a tool
 
@@ -121,6 +110,6 @@ Prefer a hook over a rule whenever the rule has already been broken more than on
 ## Writing style inside skills and rules
 
 - Imperative mood, present tense, second person implied.
-- Name the tool, not the vibe: `Call the Skill tool with "gist-toolchain"`, not "run the
-  checks".
+- Name the tool, not the vibe: `Call the Skill tool with "gist-doc-review"`, not "check
+  the comments".
 - Prefer a stop condition over a caveat: `unsupported`, `stop`, `ask once`.

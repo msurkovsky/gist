@@ -18,17 +18,12 @@ Skills are the product. Tools exist to serve them. `README.md` has the layout,
   `skills/gist-<name>/`, note the source in its frontmatter, then edit the copy.
   Vendors are added and updated only through `just vendor`; no `git subtree`, no
   submodules, no merging upstream by hand. See `docs/adr/0004-compose-via-josh.md`.
-- `languages/<lang>/toolchain.md` — the only place a language-specific command
-  may appear. A skill that needs one calls the Skill tool with `gist-toolchain`.
-  A missing language or verb is reported as `unsupported`, never guessed. New
-  language: copy `languages/_template/` and fill every verb or mark it `none`.
-  No skill changes.
 - `rules/` — always-on constraints, language-agnostic. A rule that holds for one
   project only belongs in that project, not here.
 - `hooks/` — deterministic guards. Prefer a hook over a rule once the rule has
   been broken more than once. Git hooks are `gk hook <name>` subcommands and
-  `gk hook install` puts them in a repo (`docs/adr/0009`); `hooks/` keeps the
-  Claude Code hook and a forwarder for the old commit-msg symlink.
+  `gk hook install` puts them in a repo (`docs/adr/0009`); `hooks/` keeps only
+  a forwarder for the old commit-msg symlink.
 - `views/<consumer>/workspace.josh` — must be committed here before the consumer
   runs `josh clone`. Cloning a path that does not exist yet fails.
 - `tools/` — cargo workspace. `gist-core` holds shared output plumbing,
@@ -50,7 +45,7 @@ past that, port it to `gk` instead of growing the script. `scripts/` and
 `hooks/` still carry longer shell from before this rule; `TODO.md` tracks it.
 
 Shell is allowed in two places: `scripts/`, which only contributors run, and
-`hooks/`, which holds the Claude Code hook wired into `settings.json`. Keep both
+`hooks/`, for a Claude Code hook wired into `settings.json`. Keep both
 bash 3.2 compatible (macOS ships it): no `mapfile`, no `\|` in sed.
 
 Python is allowed for throwaway glue only: single file under a skill's

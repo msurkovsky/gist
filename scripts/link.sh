@@ -4,9 +4,9 @@
 #   scripts/link.sh <skill-dir> [as-name] [dest-dir]
 #
 # Examples:
-#   scripts/link.sh skills/gist-mr-reply
+#   scripts/link.sh skills/gist-outline
 #   scripts/link.sh experimental/mattpocock/skills/engineering/tdd matt-tdd
-#   scripts/link.sh skills/gist-toolchain gist-toolchain ~/projects/frontend/.claude/skills
+#   scripts/link.sh skills/gist-doc-review gist-doc-review ~/projects/frontend/.claude/skills
 #
 # Default dest is ~/.claude/skills. Views (Josh workspaces) are the preferred way to
 # project skills into projects; this is the quick path for trying one skill on this machine.

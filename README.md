@@ -14,9 +14,8 @@ the work, read the shape of what came back, catch the wrong turn, and decide.
 ```
 skills/         the product — one directory per skill, embedded into gk
 experimental/   third-party skill repos vendored with full history, never edited here
-languages/      everything language-bound, one adapter per language; skills stay agnostic
 rules/          always-on constraints to drop into a project's CLAUDE.md or .claude/rules/
-hooks/          deterministic guards: a Claude Code hook, and a forwarder for the old commit-msg link
+hooks/          a forwarder for the old commit-msg symlink
 views/          Josh workspaces — what a consumer sees of this repo
 tools/          cargo workspace; builds the gk binary
 scripts/        repo glue: vendoring, local symlinks, the consistency check
@@ -33,22 +32,17 @@ not break, `just ci` the enforcement of both.
 |---|---|
 | `gist-outline` | the shape of a codebase — file counts, dominant languages, where the weight sits. Orienting in an unfamiliar repo |
 | `gist-doc-review` | the comments and doc strings in a change — cut what restates the code, shorten the bloated, add the missing line on public API |
-| `gist-mr-start` | a branch about to be reviewed — ticket id, branch name, commit style, hook install, all settled before the first commit |
-| `gist-mr-ready` | the gate before opening or updating an MR — checks and review per folder group, prove-red on new tests, numbers against the target branch, a description that carries only what the page cannot show |
-| `gist-mr-reply` | review comments — live discussion, skip resolved threads, fix then reply, outcome first, no longer than the comment |
-| `gist-mr-close` | closing or superseding an MR — backup ref and empty diff before any rewrite; replies, close, delete branch, in that order |
-| `gist-toolchain` | install, typecheck, lint, test, coverage of changed lines, dead code, prove-red — without knowing the language. Commands come only from `languages/`; anything else is `unsupported` |
 
-The four `gist-mr-*` skills are slash commands only: once vendored with `gk init --claude`,
-invoke them in Claude Code as `/gist-mr-start`, and so on. `gist-outline` and
-`gist-doc-review` also run when the model sees a request that matches their description, and
-`gist-toolchain` is called by the other skills and by the model whenever a task needs
-language tooling.
+Both also run when the model sees a request that matches their description.
 
-The `gist-mr-*` family is distilled from review lessons across several repositories. It
-reads the project's own conventions first and falls back to a generic style: short
-capitalised subject, no trailing period, a body that says why. Typed conventions such as
-`feat(ID):` are opt-in per project, see Hooks.
+For the rest of a change's life, use the vendored `mattpocock` skills, installed with
+`gk init --claude --experimental=mattpocock`: `/mattpocock-code-review` before opening an
+MR, `/mattpocock-pr` for its description, `/mattpocock-resolving-merge-conflicts`
+mid-rebase. `code-review` expects `/mattpocock-setup-matt-pocock-skills` to have run in
+the project first. The rules that hold across every
+MR, such as backup refs before a rewrite, reply format, and supersede order, are in
+`rules/merge-requests.md`, not in a skill you have to remember to invoke. See
+`docs/adr/0011-drop-the-mr-workflow-skills.md`.
 
 ## Build
 
@@ -129,8 +123,7 @@ here, so vendored and owned skills appear side by side under flat names:
 
 ```
 tdd = :/experimental/mattpocock/skills/engineering/tdd
-gist-mr-reply = :/skills/gist-mr-reply
-languages = :/languages
+gist-outline = :/skills/gist-outline
 ```
 
 Commit the file here first, then clone the projection where the consumer expects skills:
@@ -146,16 +139,6 @@ skills without one, name-prefixed by package (see
 `docs/adr/0005-prefix-experimental-skills-at-install.md`). Edits to vendored paths made
 through a view violate the no-edit rule; adopt first.
 
-## Languages
-
-Skills never contain language commands. `gist-toolchain` resolves
-`languages/<lang>/toolchain.md` per folder group, so a mixed repository runs each language
-against its own folders, and answers `unsupported` when the language or the verb is
-missing. Nothing is pre-seeded; a language is added when a project needs it, by copying
-`languages/_template/`. `gk init --claude` does not vendor `languages/` yet (see
-`TODO.md`); until then adapters live in `~/.claude/languages/` or the project's
-`.claude/languages/`.
-
 ## Hooks
 
 - `gk hook commit-msg`: git commit-msg hook. Short subject (72 max, note above 50),
@@ -164,9 +147,6 @@ missing. Nothing is pre-seeded; a language is added when a project needs it, by 
   Install per repo with `gk hook install`, which needs `gk` on PATH; `gk hook install --uninstall` removes
   it. It refuses when `core.hooksPath` is set. A repo that symlinked the old
   `hooks/commit-msg.sh` runs `gk hook install --force` once to replace the link.
-- `hooks/post-rebase-nag.sh`: Claude Code `PostToolUse` hook on `Bash`. After a rebase,
-  prints the re-install, regenerate, retest reminder. Wire it in `settings.json`; the
-  snippet is in the file header.
 
 ## Vendors
 
@@ -177,5 +157,5 @@ Its `/setup-matt-pocock-skills` runs in a consuming project, not here.
 
 ## Status
 
-Early. Seven skills, four tools, one vendored upstream, and a contract to keep the rest
+Early. Two skills, four tools, one vendored upstream, and a contract to keep the rest
 honest.

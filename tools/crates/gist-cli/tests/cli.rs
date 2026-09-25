@@ -982,7 +982,7 @@ fn a_symlink_found_late_in_the_skill_order_leaves_nothing_installed() {
     std::fs::create_dir_all(repo.path().join(".claude/skills")).expect("mkdir");
     std::os::unix::fs::symlink(
         outside.path(),
-        repo.path().join(".claude/skills/gist-toolchain"),
+        repo.path().join(".claude/skills/gist-outline"),
     )
     .expect("symlink");
 
@@ -990,7 +990,7 @@ fn a_symlink_found_late_in_the_skill_order_leaves_nothing_installed() {
 
     assert_eq!(code, 1);
     assert!(message.contains("symlink"), "got: {message}");
-    assert!(!repo.path().join(".claude/skills/gist-outline").exists());
+    assert!(!repo.path().join(".claude/skills/gist-doc-review").exists());
     assert!(!repo
         .path()
         .join(".claude/skills/.gist-manifest.json")

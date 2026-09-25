@@ -7,11 +7,6 @@
 - Delete `hooks/commit-msg.sh`, now a forwarder that keeps old symlinks
   enforcing, once every repo installed by symlink has re-run
   `gk hook install --force`.
-- `languages/` is not embedded, so a target repo gets `gist-toolchain` with
-  every verb `unsupported` until `~/.claude/languages/` or `.claude/languages/`
-  exists. Nothing to place yet: only `_template` exists. When the first real
-  adapter lands, embed `languages/` and place it under `.claude/languages/`,
-  which `gist-toolchain` already searches.
 - Done: `gk init --claude --uninstall` (and `--codex --uninstall`) removes
   what a prior `init` run placed, per a `<root>/.gist-manifest.json` manifest
   each `init` run now writes; a locally modified file is left in place and
@@ -26,17 +21,13 @@
   `--experimental` in one call; at least one of `--claude`/`--codex` is
   required. See `docs/adr/0006-codex-as-a-second-init-target.md`.
 - First view: `views/claude/workspace.josh` for `~/.claude/skills` on this
-  machine, then one per project that should receive the `gist-mr-*` family.
-- Wire `hooks/post-rebase-nag.sh` into `~/.claude/settings.json`.
+  machine.
 
 ## Later: port the shell under `scripts/` to `gk`
 
 - `scripts/check.sh`, `scripts/vendor.sh`, and `scripts/link.sh` predate the
   rule that anything beyond a bash one-liner is a `gk` subcommand. Candidates:
   `gk check`, `gk vendor`, `gk link`; the `just` recipes keep their names.
-- `hooks/post-rebase-nag.sh` could become `gk hook post-rebase-nag`, which
-  would also drop its `node` dependency. ADR 0009 left it out; wiring it into
-  `settings.json` stays manual either way.
 
 ## Later: decisions left open by the init review
 
@@ -51,8 +42,8 @@
 
 - CI is ubuntu-only, but `CLAUDE.md` promises bash 3.2 and the scripts lean on BSD
   tools. Run `just ci` on a Mac, in particular `scripts/vendor.sh update` (the
-  empty-array merge path) and check 4 in `scripts/check.sh` (grep pattern). The
-  fixes for those were only tested with GNU tools and bash 5. Then decide on a `macos-latest` CI job.
+  empty-array merge path). The fix for it was only tested with GNU tools and
+  bash 5. Then decide on a `macos-latest` CI job.
 
 ## Later: vendors that ship more than markdown
 
@@ -71,4 +62,3 @@
 
 - `scripts/vendor.sh` runs `git fetch -q "$url" "$branch"` without `--`, so a
   `vendors.conf` URL starting with `-` is read as a git option. Contributors only.
-- `hooks/post-rebase-nag.sh` does not match `git -C <dir> rebase`.
