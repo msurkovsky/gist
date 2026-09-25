@@ -7,7 +7,7 @@
 #
 #   scripts/vendor.sh add <name> <url> [branch]   register and import
 #   scripts/vendor.sh update [name...]            re-import registered vendors (default: all)
-#   scripts/vendor.sh list                        show registry with local/upstream state
+#   scripts/vendor.sh list                        show registry with the imported upstream SHA
 #   scripts/vendor.sh check                       list commits that touched experimental/ outside imports
 #
 # Registry: scripts/vendors.conf, one "name url branch" per line.
@@ -18,7 +18,7 @@ CONF="$ROOT/scripts/vendors.conf"
 cd "$ROOT"
 
 die() { echo "error: $*" >&2; exit 1; }
-need() { command -v "$1" >/dev/null 2>&1 || die "missing binary: $1 (see README, section Josh)"; }
+need() { command -v "$1" >/dev/null 2>&1 || die "missing binary: $1 (see README, section Composition)"; }
 
 import_one() {
   local name="$1" url="$2" branch="$3"

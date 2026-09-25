@@ -22,6 +22,7 @@ const DEFAULT_LIMIT: usize = 72;
 const SUBJECT_NOTE_ABOVE: usize = 50;
 const EXEMPT_SUBJECTS: &[&str] = &["Merge ", "fixup! ", "squash! ", "Revert "];
 
+/// Command line for `gk hook`.
 #[derive(ClapArgs, Debug)]
 pub struct Args {
     #[command(subcommand)]
@@ -65,23 +66,27 @@ struct UninstallItem {
     status: UninstallStatus,
 }
 
+/// What `hook install` did to each hook, and where.
 #[derive(Debug, Serialize)]
 pub struct InstallReport {
     directory: String,
     hooks: Vec<InstallItem>,
 }
 
+/// What `hook install --uninstall` did to each hook, and where.
 #[derive(Debug, Serialize)]
 pub struct UninstallReport {
     directory: String,
     hooks: Vec<UninstallItem>,
 }
 
+/// Advice on an accepted commit message; a rejected one is an `Err` instead.
 #[derive(Debug, Serialize)]
 pub struct CommitMsgReport {
     notes: Vec<String>,
 }
 
+/// Everything `gk hook` can report, whichever subcommand ran.
 #[derive(Debug, Serialize)]
 #[serde(untagged)]
 pub enum Report {
@@ -111,6 +116,7 @@ impl Report {
     }
 }
 
+/// Run the `gk hook` subcommand `args` names.
 pub fn run(args: Args) -> Result<Report, String> {
     match args.command {
         HookCommand::Install(args) if args.uninstall => uninstall().map(Report::Uninstall),

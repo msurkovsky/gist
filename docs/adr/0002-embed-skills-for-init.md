@@ -1,6 +1,7 @@
 # 2. Embed skills for `init`
 
-Accepted — 2026-09-24.
+Accepted — 2026-09-24. Extended by `docs/adr/0005`: `experimental/` is embedded the
+same way, and `build.rs` tells cargo to rebuild when either tree gains or loses a file.
 
 ## Context
 

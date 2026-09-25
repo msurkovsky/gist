@@ -18,12 +18,23 @@ These rules exist so the agent never has to guess.
 | `1`  | expected failure — nothing found, path missing, work refused |
 | `2`  | called wrong — bad flags, unparseable input (clap returns this) |
 
+A run that completed but left something refused, such as an `init` conflict or a
+`hook install` that found a hook that is not gk's, still prints its whole report
+with `"status":"ok"` on stdout and exits `1`. The report says what; the exit code
+says look before continuing.
+
 ## Behavior
 
 - Never interactive. No prompts, no confirmations, no spinners.
 - Never unbounded. Anything that can produce a long list takes `--limit` and
-  reports `truncated` so the caller knows it is seeing a slice.
+  reports `truncated` so the caller knows it is seeing a slice. `gk init` is the
+  exception and takes no `--limit`: what it lists is fixed by the embedded skills
+  plus the `--experimental` packages the caller names, not by the caller's data.
+  Installing a foreign package is the maintainer's manual call, so its size is
+  theirs to judge.
 - Never chatty. No progress logs on stdout; stdout is the result, nothing else.
+  `gk hook commit-msg` prints its advice on stderr and leaves stdout empty, since
+  git shows a hook's output to the committer on every commit (`docs/adr/0009`).
 - Deterministic ordering. Sort explicitly — hash iteration order is not an order.
 
 ## Adding a subcommand

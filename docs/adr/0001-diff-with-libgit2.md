@@ -1,6 +1,7 @@
 # 1. Diff with libgit2
 
-Accepted — 2026-09-23. Implemented in `b9ea9a0`.
+Accepted — 2026-09-23. Implemented in `b9ea9a0`. The scope is `gk doc`; `gk hook`
+runs `git` itself, for the reasons in `docs/adr/0009`.
 
 ## Context
 

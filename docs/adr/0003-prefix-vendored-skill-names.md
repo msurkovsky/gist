@@ -1,6 +1,7 @@
 # 3. Prefix vendored skill names
 
-Accepted — 2026-09-24.
+Accepted — 2026-09-24. The prefix is enforced now: `scripts/check.sh` fails on a
+skill directory without it, and `CLAUDE.md` says so.
 
 ## Context
 

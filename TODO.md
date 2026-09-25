@@ -40,9 +40,6 @@
 
 ## Later: decisions left open by the init review
 
-- `init` output is unbounded: 202 lines / 20 KB with `--experimental=mattpocock`,
-  and no `--limit`, against `docs/tool-contract.md`. Add `--limit` for the
-  per-file listing (totals stay complete), or record the exception in the contract.
 - `rules/code-and-comments.md` says a guard no test reaches is dead. I/O error
   arms (`could not inspect`, `could not read`) are reachable in production but not
   in tests. Decide on a carve-out; the rule is vendored into other projects.

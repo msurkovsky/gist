@@ -6,7 +6,7 @@
 //! `--experimental=<package>` adds one vendored tree under `experimental/` to
 //! whichever target(s) were selected, prefixing each skill's name with the
 //! package so it cannot silently shadow — or be shadowed by — a canonical
-//! `gist-` skill.
+//! `gist-` skill (docs/adr/0005-prefix-experimental-skills-at-install.md).
 //!
 //! `gk` ships as a single binary with no source tree alongside it, so the
 //! skills this repo produces are embedded into the binary at build time —
@@ -17,7 +17,9 @@
 //! `--uninstall` can remove exactly what a prior `init` put there, whether or
 //! not the binary running `--uninstall` still embeds the same skills. See
 //! docs/adr/0007-manifest-driven-uninstall.md. The manifest and symlinks under
-//! a target are untrusted input: docs/adr/0008-untrusted-manifests-and-symlinks.md.
+//! a target are untrusted input: docs/adr/0008-untrusted-manifests-and-symlinks.md,
+//! and the target root itself may not be a symlink, with every root checked
+//! before any is written: docs/adr/0010-refuse-a-symlinked-root-and-check-every-root-first.md.
 
 use clap::Args as ClapArgs;
 use gist_core::Human;

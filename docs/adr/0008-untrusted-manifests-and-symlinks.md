@@ -1,7 +1,8 @@
 # 8. Treat manifests and symlinks under a target as untrusted input
 
 Accepted — 2026-09-24. Partly superseded by `docs/adr/0010`: the target root
-itself may not be a symlink.
+itself may not be a symlink, and `a_symlinked_skills_root_is_still_allowed` below
+became `a_symlinked_skills_root_is_refused`.
 
 ## Context
 

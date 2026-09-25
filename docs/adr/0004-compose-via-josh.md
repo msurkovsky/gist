@@ -1,6 +1,8 @@
 # 4. Compose third-party skills with Josh
 
-Accepted — 2026-09-24.
+Accepted — 2026-09-24. Partly superseded by `docs/adr/0005`: `gk init
+--experimental=<package>` installs an `experimental/` tree's skills, so a view is no
+longer the only way to try one in a project.
 
 ## Context
 

@@ -21,7 +21,7 @@ views/          Josh workspaces — what a consumer sees of this repo
 tools/          cargo workspace; builds the gk binary
 scripts/        repo glue: vendoring, local symlinks, the consistency check
 docs/           tool contract, and decisions in docs/adr
-TODO.md         what comes next; the plans behind it live in .todo/
+TODO.md         what comes next
 ```
 
 `CONTRIBUTING.md` has a recipe per kind of change, `CLAUDE.md` the rules agents must
@@ -39,9 +39,11 @@ not break, `just ci` the enforcement of both.
 | `gist-mr-close` | closing or superseding an MR — backup ref and empty diff before any rewrite; replies, close, delete branch, in that order |
 | `gist-toolchain` | install, typecheck, lint, test, coverage of changed lines, dead code, prove-red — without knowing the language. Commands come only from `languages/`; anything else is `unsupported` |
 
-The first six are slash commands: once vendored with `gk init --claude`, invoke them in
-Claude Code as `/gist-outline`, `/gist-mr-start`, and so on. `gist-toolchain` is called by
-the other skills and by the model whenever a task needs language tooling.
+The four `gist-mr-*` skills are slash commands only: once vendored with `gk init --claude`,
+invoke them in Claude Code as `/gist-mr-start`, and so on. `gist-outline` and
+`gist-doc-review` also run when the model sees a request that matches their description, and
+`gist-toolchain` is called by the other skills and by the model whenever a task needs
+language tooling.
 
 The `gist-mr-*` family is distilled from review lessons across several repositories. It
 reads the project's own conventions first and falls back to a generic style: short
@@ -64,6 +66,7 @@ gk init --claude                   # vendor the skills into ./.claude/skills/ of
 gk init --codex                    # same skills, byte-identical, into ./.agents/skills/ for Codex CLI
 gk init --claude --codex --experimental=mattpocock  # any combination, one call
 gk init --claude --uninstall       # remove what a prior init --claude put there
+gk hook install                    # put the commit-msg hook into the repo you are in
 ```
 
 `init` is idempotent and never overwrites a file you edited — it reports a
@@ -175,5 +178,5 @@ Its `/setup-matt-pocock-skills` runs in a consuming project, not here.
 
 ## Status
 
-Early. Seven skills, three tools, one vendored upstream, and a contract to keep the rest
+Early. Seven skills, four tools, one vendored upstream, and a contract to keep the rest
 honest.
