@@ -33,6 +33,17 @@ review page detailed in
 `gk md-review` and the `gist-md-review` skill, Claude Code first. Open
 questions are listed there; this entry leaves when the feature ships.
 
+A CEO review (2026-09-26, scope reduction) settled decisions D2–D19 that the
+docs do not carry yet. Record, outside the repo:
+`~/.gstack/projects/msurkovsky-gist/ceo-plans/2026-09-26-md-review.md`.
+
+- Apply D2–D19 to the HLD, the DLD, ADRs 0013 and 0014 (task T1 there).
+- Slice 2, deferred by the review: vim key bindings; word-level track changes
+  (slice 1 marks changed blocks).
+- Open: a size cap on the reviewed file (P3); require a fallback quote to be
+  unique in the previous version too (O6b).
+- Then run the eng review, the gate before implementation.
+
 ## Later: distribution and platform support
 
 - `gk init` currently installs skills only. Decide how reusable rules should be
