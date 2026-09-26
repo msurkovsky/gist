@@ -5,7 +5,7 @@ Proposed — 2026-09-26.
 ## Context
 
 `gk md-review` lets a human review a rendered markdown file in the browser
-and submit all comments at once ([design](../design/md-review.md)). When the
+and submit all comments at once ([design](../design/md-review-hld.md)). When the
 human presses Submit, the agent is idle: its last turn ended with "here is the
 URL". Something has to put the review in front of it and start a turn.
 
@@ -101,3 +101,4 @@ codes and both renderings.
 | When | Who | Why |
 |---|---|---|
 | 2026-09-26 22:20 | Martin Surkovsky | Created |
+| 2026-09-26 23:40 | Martin Surkovsky | Link the design by its new HLD name |
