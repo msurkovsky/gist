@@ -1,7 +1,7 @@
-# Markdown review page — detailed design
+# Markdown review page — detailed design (DLD)
 
 Draft — 2026-09-26. Details the review page of the
-[high-level design](md-review.md). Nothing here is built; the interaction is
+[high-level design](md-review-hld.md). Nothing here is built; the interaction is
 to be tried in a clickable mockup before this draft is settled.
 
 ## Model
@@ -189,7 +189,6 @@ Not yet made; proposed with this draft.
 - "Review page": the ⊕ and dialog become a draft card in the margin; link
   here for detail.
 - "Open questions" 5 (how deleted text is shown): settled by track changes.
-- "Proposed file arrangement": add `docs/design/md-review-page.md`.
 - "Review log": thread states `applied`, `declined`, `answered`,
   `orphaned`, and whether orphaning is an event or derived on fold.
 
@@ -203,5 +202,5 @@ Not yet made; proposed with this draft.
    block is more predictable around diagrams.
 4. Colours for highlights and changes must stay readable in black on white
    and for colour-blind readers; pick in the mockup.
-5. Does the mockup live in the repo (for example `docs/design/md-review-page/`)
+5. Does the mockup live in the repo (for example `docs/design/md-review-dld-page/`)
    or only in a scratch directory until the design is settled?

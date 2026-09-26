@@ -1,4 +1,7 @@
-# Markdown review loop — high-level design
+# Markdown review loop — high-level design (HLD)
+
+Detail lives in DLDs next to this file: the review page in
+[md-review-dld-page.md](md-review-dld-page.md).
 
 Status: draft, under review. Not built. Decisions that survive review move to
 ADRs; observable behavior moves to `docs/cases/md-review.md`.
@@ -435,7 +438,8 @@ a section there before implementation (see open questions).
 ```
 docs/
   design/
-    md-review.md                   # this HLD; ongoing work, linked from TODO.md
+    md-review-hld.md               # this HLD; ongoing work, linked from TODO.md
+    md-review-dld-page.md          # DLD: review page, cards, keys, re-anchoring
   cases/
     md-review.md                   # behavior cases, written before implementation
   adr/

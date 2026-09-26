@@ -4,7 +4,7 @@ Proposed — 2026-09-26.
 
 ## Context
 
-A `gk md-review` session ([design](../design/md-review.md)) holds comments,
+A `gk md-review` session ([design](../design/md-review-hld.md)) holds comments,
 questions, agent replies, round boundaries, and a snapshot of the file per
 round. Three parties touch it: the browser page, the long-running `serve`
 process, and short-lived CLI calls from the agent (`wait`, `reply`, `next`).
@@ -109,3 +109,4 @@ duplicated message id appears once in the folded state.
 | When | Who | Why |
 |---|---|---|
 | 2026-09-26 22:20 | Martin Surkovsky | Created |
+| 2026-09-26 23:40 | Martin Surkovsky | Link the design by its new HLD name |

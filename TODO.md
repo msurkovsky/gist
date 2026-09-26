@@ -27,7 +27,9 @@
 
 ## In progress: browser review loop for markdown
 
-Design under review in [docs/design/md-review.md](docs/design/md-review.md):
+Design under review in [docs/design/md-review-hld.md](docs/design/md-review-hld.md), with the
+review page detailed in
+[docs/design/md-review-dld-page.md](docs/design/md-review-dld-page.md):
 `gk md-review` and the `gist-md-review` skill, Claude Code first. Open
 questions are listed there; this entry leaves when the feature ships.
 
