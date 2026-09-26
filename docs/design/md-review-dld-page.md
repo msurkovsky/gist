@@ -172,6 +172,10 @@ key table and a small mode machine on top of `Selection.modify`, a few
 hundred lines under `assets/`. Search uses `window.find` or a text walk,
 whichever behaves across the three browsers.
 
+Reviewing the source in CodeMirror with its vim mode was the alternative:
+mature bindings, but raw markdown and no diagrams, which the page exists to
+avoid.
+
 ## Risks
 
 - `Selection.modify` with `line` may jump oddly around tables, code blocks
