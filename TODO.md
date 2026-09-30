@@ -37,11 +37,22 @@ A CEO review (2026-09-26, scope reduction) settled decisions D2–D19; the
 HLD, the DLD and ADRs 0013 and 0014 carry them. Record, outside the repo:
 `~/.gstack/projects/msurkovsky-gist/ceo-plans/2026-09-26-md-review.md`.
 
-- Slice 2, deferred by the review: vim key bindings; word-level track changes
-  (slice 1 marks changed blocks).
-- Open: HLD open questions 7–9, a size cap on the reviewed file, a copied
-  phrase in re-anchoring, and which review a client means with two live.
-- Then run the eng review, the gate before implementation.
+The CEO review covered architecture, errors, security, tests and
+deployment, so no full eng review; the steps below replace it, in order:
+
+1. Validate the wake: a background task that exits after 30 minutes or
+   more wakes the Claude Code agent with its output, and is not cut off.
+   ADR 0013 and the whole loop rest on it; if it fails, back to the design.
+2. Answer the open questions: HLD open questions 3 (HTTP stack and mermaid
+   size, an ADR) and 7–9 (size cap, a copied phrase in re-anchoring, which
+   review a client means with two live); reopening a thread has no log
+   event (DLD cards).
+3. Write the long-running subcommands section of `docs/tool-contract.md`
+   and the behavior cases in `docs/cases/md-review.md`, for approval.
+4. Implement, starting with the store, log and lock (ADR 0014).
+
+Slice 2, deferred by the review: vim key bindings; word-level track changes
+(slice 1 marks changed blocks).
 
 ## Later: distribution and platform support
 
