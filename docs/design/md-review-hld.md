@@ -104,7 +104,7 @@ flowchart TB
     page["<b>Review page</b><br/>[HTML, JS, CSS embedded in gk]<br/>Rendering, comment UI, change highlights"]:::container
     serve["<b>gk md-review serve</b><br/>[Rust, long-running]<br/>HTTP server, renderer, differ,<br/>sole writer of review state"]:::container
     cli["<b>gk md-review wait / reply / next / status</b><br/>[Rust, short-lived]<br/>Agent-facing clients of the server"]:::container
-    store[("<b>Review store</b><br/>[.md-review/#lt;slug#gt;/]<br/>Event log, versions, server.json, lock")]:::container
+    store[("<b>Review store</b><br/>[.md-review/reviews/#lt;key#gt;/]<br/>Event log, versions, server.json, lock")]:::container
     records[("<b>Review records</b><br/>[.md-review/records/]<br/>One file per approved review")]:::container
   end
 
@@ -228,7 +228,7 @@ sequenceDiagram
 
   H->>A: "review docs/foo.md with me"
   A->>S: gk md-review serve docs/foo.md (background task)
-  S->>FS: lock .md-review/<slug>/, check recorded file and log format
+  S->>FS: lock .md-review/reviews/<key>/, check log format
   S->>FS: snapshot v1, write server.json (with gk version)
   S-->>A: URL with token (stdout, first line)
   A->>H: prints the URL
@@ -242,9 +242,8 @@ it cannot take the store lock, so it prints the existing URL and exits 0. A
 stale `server.json` whose process is gone is replaced, and the review
 resumes from the log.
 
-`serve` exits 1 and writes nothing when the store belongs to a different
-file (two paths that map to one slug) or its log has a format this `gk`
-does not know. A client whose `gk` version differs from the one in
+`serve` exits 1 and writes nothing when the store's log has a format this
+`gk` does not know. A client whose `gk` version differs from the one in
 `server.json` exits 1 and names `gk md-review stop`, so an upgrade never
 talks to an old server.
 
@@ -318,9 +317,9 @@ sequenceDiagram
   H->>B: Approve, optional note
   B->>S: POST /api/approve {round: N, version: N, note}
   S->>S: append approved {version, hash}
-  S->>S: write .md-review/records/<slug>-<time>.md
+  S->>S: write .md-review/records/<name>-<time>.md
   S-->>W: deliver: approved, record path, bounded summary
-  S->>S: delete .md-review/<slug>/, exit 0
+  S->>S: delete .md-review/reviews/<key>/, exit 0
   W-->>A: exits 0
   A->>H: approved at round N, record at <path>
 ```
@@ -338,8 +337,10 @@ committed along the way.
   exits. A `stop` before delivery keeps the store.
 - **Bound to what was seen.** The approval names the version on screen and
   its hash. When the working file differs, because the agent edited after
-  that version, the record says so and includes the block diff; the skill
-  must not present that difference as approved.
+  that version, the record says so and carries the full approved text
+  and the block diff to the working file; the skill must not present that
+  difference as approved. Deleting the store then loses nothing that was
+  approved.
 - **Review record.** A markdown file under `.md-review/records/`, outside
   the store and so kept after approval: every round's threads, messages
   and outcomes, the approve note, and the approved version. Complete, not
@@ -379,14 +380,22 @@ Claude Code 2.1.283: a resumed fork honours `--model`, and `--effort` and
 ### Store layout
 
 ```
-<repo root>/.md-review/<slug>/     # slug from the file path: docs-foo-md
+<repo root>/.md-review/reviews/<key>/  # key: hash of the file path
   lock                             # held by serve for its lifetime
   server.json                      # pid, port, token, gk version; mode 0600
-  events.jsonl                     # append-only review log
+  events.jsonl                     # append-only review log, records the path
   v1.md  v2.md  …                  # snapshot per round
 <repo root>/.md-review/records/
-  <slug>-<time>.md                 # review record, written on approve
+  <name>-<time>.md                 # review record, written on approve
 ```
+
+The store key is a hash of the file's path relative to the root: one path
+segment, so deletion stays confined, and unique per path, so two files
+never share a store. `review_started` records the path, and `status` shows
+it. A record's `<name>` is the path flattened for reading (`docs-foo-md`);
+it is never looked up, and the time keeps names apart. Approve deletes
+only `reviews/<key>/`: the intermediate versions and working state. The
+approved result stays, as the working file and the record.
 
 The lock is an OS file lock (`File::lock`), released when `serve` dies, so a
 crash never leaves a review locked.
@@ -513,7 +522,7 @@ Two additions, both omitted when they do not apply:
 
 | Command | Does | Exit |
 |---|---|---|
-| `gk md-review serve <file> [--model --effort --session]` | starts or reuses the server, prints the URL | runs until approval is delivered, or stop; 0 when reusing a live server; 1 on bind failure, slug clash, unknown log format |
+| `gk md-review serve <file> [--model --effort --session]` | starts or reuses the server, prints the URL | runs until approval is delivered, or stop; 0 when reusing a live server; 1 on bind failure, unknown log format |
 | `gk md-review wait [--timeout]` | returns a pending submit or approval, or blocks until one; no timeout by default | 0 on event, 1 on timeout, no server or version mismatch |
 | `gk md-review reply <thread> --outcome … --note …` | records the agent's answer to a thread | 0 / 1; 1 after approval, naming it |
 | `gk md-review next` | closes the round, snapshots the next version | 0 / 1; 1 after approval, naming it |
@@ -537,9 +546,6 @@ a section there before implementation (see open questions).
   from the page.
 - The bundled `mermaid.min.js` is pinned to a version, with its checksum
   recorded in the repository.
-- Two file paths can map to one slug (`docs/foo.md` and `docs-foo.md`).
-  `serve` checks the file recorded in `review_started` and refuses a store
-  that belongs to another file, so one review never resumes another's log.
 - Store deletion reuses the confined-path and symlink refusal of ADRs 0008
   and 0010; a store that cannot be deleted safely is kept.
 
@@ -615,3 +621,7 @@ reduced to what the others do not cover.
    old version (original and copy) and once in the new one (original
    deleted) passes "unique in the new version" and attaches to the copy.
    Requiring uniqueness in the old version too would close it.
+9. **Which review a client means.** `wait`, `reply`, `next` and `status`
+   take no file. With two reviews live they cannot tell which one is meant.
+   Either they take `<file>`, or they exit 1 when more than one review is
+   live and name the choices.
