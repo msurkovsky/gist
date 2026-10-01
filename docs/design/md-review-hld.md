@@ -38,11 +38,21 @@ Slice 2, designed but deferred:
   unsent drafts) as a file; importing it resumes the review, through
   `serve`, so `serve` stays the only writer. Covers a dead machine or
   another browser; slice 1 covers a closed tab with the draft backup.
+- **Answerer flags on `serve`.** `--model`, `--effort` and `--session`,
+  recorded in `review_started`. Slice 1 `serve` takes the file only;
+  Explain is their only reader.
+- **Finer blocks.** Slice 1 blocks are the document's top-level elements:
+  a whole list, table or block quote is one block for the gutter marks and
+  the diff. Slice 2 may split lists and quotes into their items.
+- **Block pairing by content.** Slice 1 pairs changed blocks in order, so a
+  paragraph inserted before an edited one shows as changed and the edited
+  one as added. Both are still marked.
 
 Parked, designed for but not built:
 
 - **Explain.** A question on a selection, answered while the review goes on,
   without editing the file. Answered by a read-only fork of the agent session.
+  Until it is built, `serve` refuses a question.
 - **Codex** as a second host.
 - **Live comments** delivered one by one instead of per submit.
 
@@ -354,7 +364,13 @@ committed along the way.
   the store and so kept after approval: every round's threads, messages
   and outcomes, the approve note, and the approved version. Complete, not
   bounded by `--limit`; `wait` prints its path and a bounded summary. The
-  skill copies it into the merge request as review evidence.
+  skill copies it into the merge request as review evidence. It names the
+  approved version and its hash; it holds the approved text only when the
+  working file differs, since otherwise the working file is that text.
+- **Confined deletion.** A store that cannot be deleted safely is kept,
+  and the approve answer to the page says so. `serve` then runs until
+  `stop`: a client will not read `server.json` through a symlink, so
+  `wait` cannot deliver that approval.
 
 ### Explain (parked)
 
@@ -391,7 +407,7 @@ Claude Code 2.1.283: a resumed fork honours `--model`, and `--effort` and
 ```
 <repo root>/.md-review/reviews/<key>/  # key: hash of the file path
   lock                             # held by serve for its lifetime
-  server.json                      # pid, port, token, gk version; mode 0600
+  server.json                      # file, pid, port, token, gk version; mode 0600
   events.jsonl                     # append-only review log, records the path
   v1.md  v2.md  …                  # snapshot per round
 <repo root>/.md-review/records/
@@ -420,7 +436,7 @@ seconds since the Unix epoch. Current state is a fold over the log.
 
 | Event | Fields |
 |---|---|
-| `review_started` | format (1), file, version 1, hash, host, model, effort, session (optional) |
+| `review_started` | format (1), file, version 1, hash; slice 2 adds host, model, effort, session (optional) |
 | `message_posted` | thread, message, author (`human`/`agent`), kind (`comment`/`question`), body, anchor (new thread only), outcome (agent only: `applied`/`declined`/`answered`), model (answerer only) |
 | `message_edited` | message, body (reviewer's own pending message only) |
 | `message_deleted` | message (reviewer's own pending message only) |
@@ -533,20 +549,46 @@ Two additions, both omitted when they do not apply:
   Human rendering: `warning: docs/foo.md changed since round 2 was
   read; line numbers refer to v2`.
 
+## HTTP API
+
+Every request needs the Host `127.0.0.1:<port>` (else 403) and the token,
+as `Authorization: Bearer` or the `token` query parameter (else 401).
+A refusal answers `{"message": "…"}` and appends nothing.
+
+| Route | Caller | Does |
+|---|---|---|
+| `GET /` | browser | the page, with a CSP that allows only `serve`, and `Referrer-Policy: no-referrer` since the URL holds the token |
+| `GET /api/review?after&hold` | page | everything the page draws: blocks, changes since the previous version, threads anchored to the current version, phase, agent presence, drift; at once when its `seq` differs from `after`, else after `hold` (at most 60 s) |
+| `POST /api/threads` | page | a comment: a new thread with an `anchor`, or a reply with a `thread`; the page picks the message id, so a retry appends nothing |
+| `PATCH`, `DELETE /api/messages/{id}` | page | edit or delete a pending comment |
+| `POST /api/threads/{id}/resolve` | page | resolve a thread |
+| `POST /api/submit` | page | submit the round, with an optional summary |
+| `POST /api/approve` | page | approve the version on screen; writes the record and returns its path, and `store_kept` when the store could not be deleted |
+| `GET /api/wait?hold&limit` | `wait` | a pending approval or submit, else the first within `hold`, else 204 |
+| `POST /api/reply` | `reply` | the agent's outcome and note on a thread |
+| `POST /api/next` | `next` | snapshot the working file as the next version and start the next round |
+| `GET /api/status?round&limit&offset` | `status`, clients finding a live server | where the review stands |
+| `POST /api/stop` | `stop` | end the server, keep the store |
+
+Page writes carry `round` and `version`; one against another round or
+version, or after submit or approval, gets 409. `reply` and `next` get 409
+unless a submitted round waits for them, and after approval.
+
 ## CLI surface
 
 | Command | Does | Exit |
 |---|---|---|
-| `gk md-review serve <file> [--model --effort --session]` | starts or reuses the server, prints the URL | runs until approval is delivered, or stop; 0 when reusing a live server; 1 on bind failure, unknown log format, file over 1 MiB |
+| `gk md-review serve <file>` | starts or reuses the server, prints the URL | runs until approval is delivered, or stop; 0 when reusing a live server; 1 on bind failure, unknown log format, file over 1 MiB or not UTF-8 |
 | `gk md-review wait [<file>] --timeout <dur>` | returns a pending submit or approval, or blocks until one or the timeout | 0 on event or timeout; 1 on no server or version mismatch |
-| `gk md-review reply [<file>] <thread> --outcome … --note …` | records the agent's answer to a thread | 0 / 1; 1 after approval, naming it |
-| `gk md-review next [<file>]` | closes the round, snapshots the next version | 0 / 1; 1 after approval, naming it |
-| `gk md-review status [<file>] [--round N]` | current round, open threads, waiters, undelivered submit | 0 / 1 |
+| `gk md-review reply [<file>] <thread> --outcome … --note …` | records the agent's answer to a thread | 0 / 1; 1 unless a submitted round waits, and after approval, naming it |
+| `gk md-review next [<file>]` | closes the round, snapshots the next version | 0 / 1; 1 unless a submitted round waits, after approval naming it, and on a file over 1 MiB or not UTF-8 |
+| `gk md-review status [<file>] [--round N] [--offset N]` | current round, open threads, waiters, undelivered submit; with `--round`, that round's submitted threads, paged by `--limit` and `--offset` | 0 / 1 |
 | `gk md-review stop [<file>]` | stops the server, keeps the store | 0 / 1 |
 
 All take `--json` and follow the envelope in `docs/tool-contract.md`.
 Clients take the reviewed file. Without it, they use the one live review,
-or exit 1 listing the live ones when there are several. The skill always
+found through the `file` in each `server.json`, or exit 1 listing the live
+ones when there are several. The skill always
 passes it, so a review started from another session never reaches this
 session's `wait`.
 `serve` and `wait` block; the contract's "Long-running subcommands"

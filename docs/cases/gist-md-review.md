@@ -160,8 +160,8 @@ the approved text in full and the block diff to the working file.
 ### approve-confined
 
 A store that is a symlink, or resolves outside `.md-review/reviews/`, is
-not deleted; the record is still written and the result says the store
-was kept.
+not deleted; the record is still written and the approve answer says the
+store was kept.
 
 ## Page
 
