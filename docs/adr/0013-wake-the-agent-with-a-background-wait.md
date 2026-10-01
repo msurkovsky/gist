@@ -55,11 +55,12 @@ The agent channel for slice 1 is the `gk` CLI, not MCP:
 
 - `gk md-review serve <file>` runs as a background task for the whole review
   and prints the URL as its first line of stdout.
-- `gk md-review wait` returns a pending submit or approval at once, or blocks
-  until one arrives, prints it, and exits 0. No timeout by default;
-  `--timeout` exists for callers that want one and exits 1 when it fires. It
-  exits 1 at once when no server is running for the file, or when the
-  server's `gk` version differs from its own, naming `gk md-review stop`.
+- `gk md-review wait --timeout <dur>` returns a pending submit or approval
+  at once, or blocks until one arrives, prints it, and exits 0. When the
+  timeout fires first it prints a `timeout` event and exits 0; the skill
+  starts it again. It exits 1 at once when no server is running for the
+  file, or when the server's `gk` version differs from its own, naming
+  `gk md-review stop`.
 - `reply`, `next`, `status` and `stop` return immediately like any other `gk`
   subcommand. After approval, `reply` and `next` exit 1 naming it.
 
@@ -79,9 +80,18 @@ crash between receipt and acknowledgement loses the review silently.
 one-line reminder of the next commands, never a prompt: the procedure lives in
 the `gist-md-review` skill.
 
-The page shows "no agent listening" while a submit is pending and no `wait`
-is connected, and `status` reports waiters and an undelivered submit, so a
-broken loop is visible to both the reviewer and the agent.
+The timeout is required and sits below the host's background-task limit.
+Claude Code stops a background task at its timeout, at most 2 hours,
+reports it as killed and tells the agent not to restart it. A `wait` that
+times out itself completes normally, so the restart is the skill's rule,
+not a fight with the host. The skill sets both from one value: 110 minutes
+for `wait` under a 120-minute task limit. A submit made during the restart
+is pending and returned by the next `wait`.
+
+The page shows the agent as away when no `wait` has polled for 90 seconds,
+a grace that hides the routine restart, and `status` reports waiters and an
+undelivered submit, so a broken loop is visible to both the reviewer and
+the agent.
 
 ## Consequences
 
@@ -89,12 +99,15 @@ broken loop is visible to both the reviewer and the agent.
 `serve` and `wait` block, which it does not cover. Before implementation it
 gains a section on long-running subcommands: they never prompt; `serve`
 writes only its first result line to stdout; `wait` writes only its final
-result; timeouts are opt-in and exit 1; no progress output.
+result; a timeout is an outcome and exits 0; no progress output.
 
 The loop depends on a Claude Code behaviour, not a protocol. If Claude Code
-stops waking the agent on background task exit, the loop breaks; the first
-host run under `docs/cases/md-review.md` checks it, together with whether a
-long-running background task is ever cut off.
+stops waking the agent on background task exit, or lowers its background
+limit below the `wait` timeout, the loop breaks; the host case under
+`docs/cases/md-review.md` checks it.
+
+An idle review costs one short agent turn per timeout, about one every
+two hours.
 
 Codex has no known way to wake an idle TUI session. Adding Codex means a
 second channel, likely `codex exec resume` driven by the server, or MCP after
@@ -110,9 +123,19 @@ makes that explicit rather than leaving the agent to guess.
 
 ## Verification
 
-Not built. The first host run checks, in Claude Code: the agent wakes on
-`wait` exit with the review visible; a `wait` left running for 30 minutes is
-not cut off; `wait` with no server exits 1 with a message naming `serve`.
+Not built. A spike on 2026-10-01 in Claude Code (a Python page with a
+button, blocking until clicked) showed:
+
+- a click wakes the agent with the output;
+- a task that reaches its background limit is reported killed, its output
+  cut, with a note telling the agent not to restart it;
+- a task that times out itself 20 s before a 120 s limit completes with
+  exit 0 and its output intact;
+- a submit after 31 minutes wakes the agent, 8 s later, from a background
+  browser tab.
+
+The host case checks the same with the real `wait`, and that `wait` with no
+server exits 1 with a message naming `serve`.
 End-to-end tests in `tools/crates/gist-cli/tests/md_review.rs` cover the exit
 codes and both renderings, and delivery: a `wait` started after the submit
 returns it; a delivered submit fetched again by a new `wait` is marked
@@ -125,6 +148,7 @@ with a test flag instead of sleeping.
 
 | When | Who | Why |
 |---|---|---|
+| 2026-10-01 06:12 | Martin Surkovsky | Require a `wait` timeout below the host limit, after the wake spike |
 | 2026-09-30 22:05 | Martin Surkovsky | Apply the CEO review: durable, at-least-once delivery; version check |
 | 2026-09-26 23:40 | Martin Surkovsky | Link the design by its new HLD name |
 | 2026-09-26 22:20 | Martin Surkovsky | Created |
