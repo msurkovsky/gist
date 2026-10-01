@@ -96,10 +96,10 @@ the agent.
 ## Consequences
 
 `docs/tool-contract.md` says tools are never interactive and never unbounded.
-`serve` and `wait` block, which it does not cover. Before implementation it
-gains a section on long-running subcommands: they never prompt; `serve`
-writes only its first result line to stdout; `wait` writes only its final
-result; a timeout is an outcome and exits 0; no progress output.
+`serve` and `wait` block, so it gained a section on long-running
+subcommands: they never prompt; `serve` writes only its first result line
+to stdout; `wait` writes only its final result; a timeout is an outcome and
+exits 0; restarting loses nothing; no progress output.
 
 The loop depends on a Claude Code behaviour, not a protocol. If Claude Code
 stops waking the agent on background task exit, or lowers its background
@@ -148,6 +148,7 @@ with a test flag instead of sleeping.
 
 | When | Who | Why |
 |---|---|---|
+| 2026-10-01 17:44 | Martin Surkovsky | The tool contract section now exists |
 | 2026-10-01 17:41 | Martin Surkovsky | Point to the case file by its skill name, as `gk check` requires |
 | 2026-10-01 06:12 | Martin Surkovsky | Require a `wait` timeout below the host limit, after the wake spike |
 | 2026-09-30 22:05 | Martin Surkovsky | Apply the CEO review: durable, at-least-once delivery; version check |
