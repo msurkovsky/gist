@@ -253,7 +253,6 @@ function drawToolbar() {
   const parts = [`round ${view.round}`, `v${view.version}`];
   const pending = pendingCount();
   if (pending) parts.push(`${pending} pending`);
-  if (view.phase === "submitted") parts.push("agent is revising");
   $("where").textContent = "· " + parts.join(" · ");
   $("submit").disabled = view.phase !== "open" || view.blocks.length === 0;
   $("approve").disabled = view.phase === "approved";
@@ -284,6 +283,12 @@ function drawConnection() {
     node.replaceChildren(dot, "agent listening");
     return;
   }
+  // A revising agent runs no wait until the next round starts.
+  if (view.phase === "submitted" && view.delivered) {
+    node.className = "connection listening";
+    node.replaceChildren(dot, "agent revising");
+    return;
+  }
   node.className = "connection away";
   node.replaceChildren(dot, view.agent.last_wait ? `agent away since ${clock(view.agent.last_wait)}` : "agent not listening yet");
   // The page cannot wake the agent; it can only say how. The skill picks
@@ -307,6 +312,10 @@ function drawBanner() {
       el("button", { type: "button", onclick: () => location.reload() }, "Reload"),
     );
     banner.hidden = false;
+  } else if (view.phase === "submitted") {
+    banner.className = "banner working";
+    banner.replaceChildren(el("span", {}, revising()));
+    banner.hidden = false;
   } else if (view.file_differs && view.phase === "open") {
     banner.className = "banner";
     banner.replaceChildren(
@@ -316,6 +325,18 @@ function drawBanner() {
   } else {
     banner.hidden = true;
   }
+}
+
+// What the agent is doing with the submitted round, for the banner.
+function revising() {
+  const next = `Round ${view.round + 1} appears here by itself.`;
+  if (!view.delivered) return `Submitted. The agent gets it when it next listens. ${next}`;
+  const sent = view.threads.filter((thread) =>
+    thread.messages.some((message) => message.author === "human" && message.round === view.round));
+  const answered = sent.filter((thread) =>
+    thread.messages.some((message) => message.author === "agent" && message.round === view.round));
+  const progress = sent.length ? ` · ${answered.length} of ${sent.length} comments answered` : "";
+  return `The agent is revising since ${clock(view.delivered)}${progress}. ${next}`;
 }
 
 function drawDocument() {
@@ -530,10 +551,10 @@ function label(thread) {
   if (thread.state === "applied") return `applied in round ${thread.applied_in}`;
   if (thread.state === "resolved") return "resolved";
   const agent = [...thread.messages].reverse().find((message) => message.author === "agent");
-  if (view.phase === "submitted" && thread.messages.some((message) => message.round === view.round)) {
-    return "sent, agent is revising";
-  }
   if (agent?.outcome === "declined" && agent.round === thread.messages.at(-1).round) return "declined";
+  if (view.phase === "submitted" && thread.messages.some((message) => message.round === view.round)) {
+    return "sent";
+  }
   return "open";
 }
 
