@@ -233,5 +233,42 @@ Expected: this skill is not selected; it reviews markdown documents only.
 
 ## Evidence and review
 
-None yet. A spike on 2026-10-01 showed the wake behaviour these cases rely
-on (ADR 0013, Verification); it is not evidence for any case above.
+A spike on 2026-10-01 showed the wake behaviour these cases rely on
+(ADR 0013, Verification); it is not evidence for any case above.
+
+### Trial 1 — 2026-10-01, by hand
+
+Host Claude Code 2.1.287, model `claude-opus-5-5`, `gk` built from
+`95d1390`. Fixture: a fresh git repository with the skill installed by
+`gk init --claude` and a sample `docs/plan.md` (sections, list, mermaid
+diagram, table). Run by the reviewer, Martin Surkovsky.
+
+- **host-loop: passed.** Request "review docs/plan.md with me" selected
+  the skill. The agent ran `serve --detach`, printed the URL, started
+  `wait --timeout 110m` as a background task with a 120-minute limit,
+  and ended its turn. A submit with two comments, one on the mermaid
+  diagram, and a summary woke it. It edited the file, replied to both
+  threads (one applied, one declined with the answer to a question),
+  ran `next` and started `wait` again. The page moved to round 2 by
+  itself.
+- **host-approved: passed.** Approved in round 2 with a note. The agent
+  reported the round, the record path and the thread tally, and started
+  no further `wait`.
+- Not exercised: host-timeout-restart, host-redelivered,
+  host-comment-not-instruction, host-non-trigger.
+
+What the reviewer reported:
+
+- Liked: commenting on a selection, including the diagram; a reply on
+  every comment; the page updating itself; good revisions; a simple
+  approve with a record.
+- The chat did not send the reviewer back to the page when round 2 was
+  ready ("same URL", no link), and the agent then advised a reload the
+  page did not need. Fixed in the skill: the round's last message gives
+  the URL and says the round is on the page.
+- Nothing showed the agent was working between submit and the next
+  round. Fixed on the page: a banner says whether the agent has the
+  submit, since when it revises, and how many comments it answered.
+- No follow-up within a round: a reply to the agent's answer reaches it
+  only with the next submit. That is the parked Live comments item in the
+  HLD, kept for later.
