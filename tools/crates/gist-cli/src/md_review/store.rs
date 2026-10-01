@@ -52,14 +52,7 @@ impl Location {
             return Err(format!("not a file: {}", file.display()));
         }
         let parent = canonical.parent().unwrap_or(Path::new("/"));
-        let (root, git_dir) = match git_dirs(parent)? {
-            Some((top, common)) => (top, Some(common)),
-            None => {
-                let cwd = std::fs::canonicalize(cwd)
-                    .map_err(|err| format!("could not resolve {}: {err}", cwd.display()))?;
-                (cwd, None)
-            }
-        };
+        let (root, git_dir) = root_for(parent, cwd)?;
         let relative = canonical.strip_prefix(&root).map_err(|_| {
             format!(
                 "{} is outside {}, where its review would be kept",
@@ -84,12 +77,57 @@ impl Location {
         })
     }
 
+    /// Every review under the root of `cwd` that has a `server.json`, by
+    /// file path. Whether its server still runs is for the caller to ask.
+    pub fn with_servers(cwd: &Path) -> Result<Vec<(Self, ServerInfo)>, String> {
+        let (root, git_dir) = root_for(cwd, cwd)?;
+        let reviews = Path::new(DIR).join(REVIEWS);
+        refuse_symlink(&root, &reviews)?;
+        let entries = match std::fs::read_dir(root.join(&reviews)) {
+            Ok(entries) => entries,
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+            Err(err) => return Err(format!("could not list {}: {err}", reviews.display())),
+        };
+        let mut found = Vec::new();
+        for entry in entries {
+            let entry =
+                entry.map_err(|err| format!("could not list {}: {err}", reviews.display()))?;
+            let Some(key) = entry.file_name().to_str().map(str::to_string) else {
+                continue;
+            };
+            let probe = Self {
+                root: root.clone(),
+                file: String::new(),
+                key,
+                git_dir: git_dir.clone(),
+            };
+            let Ok(Some(info)) = probe.read_server() else {
+                continue;
+            };
+            // The key is derived from the path, so a server.json naming
+            // another file was not written by that review's server.
+            if key_for(&info.file) != probe.key {
+                continue;
+            }
+            found.push((
+                Self {
+                    file: info.file.clone(),
+                    ..probe
+                },
+                info,
+            ));
+        }
+        found.sort_by(|a, b| a.0.file.cmp(&b.0.file));
+        Ok(found)
+    }
+
     /// The reviewed file, relative to the root, `/`-separated.
     pub fn file(&self) -> &str {
         &self.file
     }
 
     /// The directory that holds `.md-review/`.
+    #[cfg(test)]
     pub fn root(&self) -> &Path {
         &self.root
     }
@@ -140,6 +178,19 @@ impl Location {
     }
 }
 
+/// The root that holds `.md-review/` for `dir`: the top level of its git
+/// work tree, or `cwd` outside one; with the git common directory.
+fn root_for(dir: &Path, cwd: &Path) -> Result<(PathBuf, Option<PathBuf>), String> {
+    match git_dirs(dir)? {
+        Some((top, common)) => Ok((top, Some(common))),
+        None => {
+            let cwd = std::fs::canonicalize(cwd)
+                .map_err(|err| format!("could not resolve {}: {err}", cwd.display()))?;
+            Ok((cwd, None))
+        }
+    }
+}
+
 /// The top level and the common git directory of the work tree holding
 /// `dir`, or `None` outside one. Asked of git itself, as `gk hook` does.
 fn git_dirs(dir: &Path) -> Result<Option<(PathBuf, PathBuf)>, String> {
@@ -176,6 +227,11 @@ fn key_for(file: &str) -> String {
     digest[..KEY_HEX_CHARS].to_string()
 }
 
+/// Where the record `name` is written, relative to the root.
+pub fn record_path(name: &str) -> String {
+    format!("{DIR}/{RECORDS}/{name}")
+}
+
 /// SHA-256 of a version's bytes, as recorded in the log.
 pub fn hash(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
@@ -205,6 +261,8 @@ fn refuse_symlink(root: &Path, rel: &Path) -> Result<(), String> {
 /// Address and credentials of a running `serve`, read by its clients.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ServerInfo {
+    /// The reviewed file, relative to the root.
+    pub file: String,
     pub pid: u32,
     pub port: u16,
     pub token: String,
@@ -331,6 +389,9 @@ pub struct Review {
     /// The current round's submit, pending until the next round starts.
     pub submit: Option<Submit>,
     pub approval: Option<Approval>,
+    /// Threads ever opened, deleted ones included, so a new thread's id
+    /// is never one used before.
+    pub opened: u32,
     messages_seen: HashSet<String>,
 }
 
@@ -374,12 +435,13 @@ pub enum ThreadState {
 }
 
 /// One message in a thread.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Message {
     pub id: String,
     pub author: Author,
     pub kind: Kind,
     pub body: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub outcome: Option<Outcome>,
     /// Round it was posted in.
     pub round: u32,
@@ -431,6 +493,7 @@ impl Review {
                     Some(index) => index,
                     None => match anchor {
                         Some(anchor) => {
+                            self.opened += 1;
                             self.threads.push(Thread {
                                 id: thread.clone(),
                                 anchor: anchor.clone(),
@@ -519,6 +582,29 @@ impl Review {
     /// Whether a message with this id is already in the log.
     pub fn has_message(&self, id: &str) -> bool {
         self.messages_seen.contains(id)
+    }
+
+    /// The current version's number.
+    pub fn version(&self) -> u32 {
+        self.versions.len() as u32
+    }
+
+    /// Threads with a reviewer message posted in `round`: what that
+    /// round's submit hands the agent.
+    pub fn round_threads(&self, round: u32) -> impl Iterator<Item = &Thread> {
+        self.threads.iter().filter(move |thread| {
+            thread
+                .messages
+                .iter()
+                .any(|m| m.author == Author::Human && m.round == round)
+        })
+    }
+
+    /// Whether `message` is not yet submitted, the only kind that may still
+    /// be edited or deleted. Only the reviewer's messages can be: the agent
+    /// posts only while a submit is pending.
+    pub fn is_pending(&self, message: &Message) -> bool {
+        message.round == self.round && self.submit.is_none() && self.approval.is_none()
     }
 }
 
@@ -658,11 +744,51 @@ impl Store {
         self.write_file(SERVER, &bytes, true)
     }
 
+    /// Remove `server.json` when the server stops, so a client finds no
+    /// server rather than a dead one.
+    pub fn clear_server(&self) -> Result<(), String> {
+        let rel = self.location.store_rel().join(SERVER);
+        refuse_symlink(&self.location.root, &rel)?;
+        match std::fs::remove_file(self.location.root.join(&rel)) {
+            Ok(()) => Ok(()),
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(err) => Err(format!("could not remove {}: {err}", rel.display())),
+        }
+    }
+
+    /// Write the review record `name` under `.md-review/records/`, outside
+    /// the store so it outlives it, and return its path relative to the
+    /// root. An existing record of that name is kept: it was written for
+    /// the same approval before a restart.
+    pub fn write_record(&self, name: &str, bytes: &[u8]) -> Result<String, String> {
+        let rel = Path::new(DIR).join(RECORDS).join(name);
+        refuse_symlink(&self.location.root, &rel)?;
+        let path = self.location.root.join(&rel);
+        std::fs::create_dir_all(self.location.records_dir())
+            .map_err(|err| format!("could not create {}: {err}", rel.display()))?;
+        let written = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+            .and_then(|mut file| file.write_all(bytes).and_then(|()| file.sync_data()));
+        match written {
+            Ok(()) => {}
+            Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => {}
+            Err(err) => return Err(format!("could not write {}: {err}", rel.display())),
+        }
+        Ok(record_path(name))
+    }
+
+    /// Whether `remove` would delete the store, or why it would keep it.
+    pub fn removable(&self) -> Result<(), String> {
+        refuse_symlink(&self.location.root, &self.location.store_rel())
+    }
+
     /// Delete the store, confined to `.md-review/reviews/<key>`: refused,
     /// leaving everything in place, when any part of that path is a
     /// symlink. The key is hex, so the path has no `..` to escape by.
-    pub fn remove(self) -> Result<(), String> {
-        refuse_symlink(&self.location.root, &self.location.store_rel())?;
+    pub fn remove(&self) -> Result<(), String> {
+        self.removable()?;
         let dir = self.location.store_dir();
         std::fs::remove_dir_all(&dir)
             .map_err(|err| format!("could not delete {}: {err}", dir.display()))
@@ -919,6 +1045,7 @@ mod tests {
         let location = fixture.write("docs/foo.md", "a\n");
         let store = writer(&location);
         let info = ServerInfo {
+            file: "docs/foo.md".to_string(),
             pid: 1,
             port: 4000,
             token: "secret".to_string(),
@@ -1125,6 +1252,28 @@ mod tests {
         let err = open(&location, b"a\n").unwrap_err();
         assert!(err.contains("symlink"), "{err}");
         assert_eq!(std::fs::read_dir(elsewhere.path()).unwrap().count(), 0);
+    }
+
+    // Case: docs/cases/gist-md-review.md#client-which-review
+    #[test]
+    fn a_server_json_naming_another_file_is_not_listed() {
+        let fixture = Fixture::git();
+        let foo = fixture.write("docs/foo.md", "a\n");
+        let bar = fixture.write("docs/bar.md", "b\n");
+        let info = |file: &str| ServerInfo {
+            file: file.to_string(),
+            pid: 1,
+            port: 4000,
+            token: "t".to_string(),
+            version: "v".to_string(),
+        };
+        writer(&foo).write_server(&info("docs/foo.md")).unwrap();
+        writer(&bar).write_server(&info("docs/foo.md")).unwrap();
+
+        let listed = Location::with_servers(fixture.dir.path()).unwrap();
+        let files: Vec<_> = listed.iter().map(|(l, _)| l.file()).collect();
+        assert_eq!(files, ["docs/foo.md"]);
+        assert_eq!(listed[0].0.store_dir(), foo.store_dir());
     }
 
     // Case: docs/cases/gist-md-review.md#approve-confined

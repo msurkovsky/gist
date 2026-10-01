@@ -11,8 +11,10 @@ path = "src/main.rs"
 
 [dependencies]
 gist-core = { workspace = true }
+axum = { workspace = true }
 clap = { workspace = true }
 comrak = { workspace = true }
+getrandom = { workspace = true }
 git2 = { workspace = true }
 ignore = { workspace = true }
 include_dir = { workspace = true }
@@ -22,6 +24,9 @@ serde_json = { workspace = true }
 serde-saphyr = { workspace = true }
 sha2 = { workspace = true }
 similar = { workspace = true }
+tokio = { workspace = true }
+ureq = { workspace = true }
 
 [dev-dependencies]
 tempfile = "3"
+tower = { version = "0.5", features = ["util"] }
