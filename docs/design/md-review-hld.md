@@ -415,7 +415,8 @@ working directory.
 
 ### Review log
 
-One JSON object per line. Current state is a fold over the log.
+One JSON object per line, each with `at`, the time it was appended in
+seconds since the Unix epoch. Current state is a fold over the log.
 
 | Event | Fields |
 |---|---|
@@ -424,12 +425,13 @@ One JSON object per line. Current state is a fold over the log.
 | `message_edited` | message, body (reviewer's own pending message only) |
 | `message_deleted` | message (reviewer's own pending message only) |
 | `review_submitted` | round, summary (optional) |
-| `review_delivered` | round or `approved`, time |
+| `review_delivered` | round, approved (`true` when the approval was delivered) |
 | `round_started` | round, version, hash |
 | `thread_resolved` | thread |
 | `approved` | round, version, hash, note (optional), discarded (threads pending at approve) |
 
-A log whose `format` this `gk` does not know is refused and left untouched.
+A log whose `format` this `gk` does not know, or whose `review_started`
+names another file, is refused and left untouched.
 Edits and deletes after submit get 409, like any stale write. Whether a
 thread is orphaned is not an event: it is derived on fold, by re-anchoring
 against the current version. Nor is reopening: a reviewer message after a

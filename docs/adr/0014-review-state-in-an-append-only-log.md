@@ -128,6 +128,12 @@ A crash between appending an event and answering the client can make the
 client retry and append twice. Messages carry a client-generated id; the
 fold drops duplicates.
 
+A crash in the middle of an append leaves a last line cut short. `serve`
+drops it on open: the event was never acknowledged, so no client acted
+on it. Refusing the log instead would end the review over one lost
+write. A log whose `review_started` names another file is refused, so a
+copied store or a key collision never resumes the wrong review.
+
 The server is a single point: if it is down, the agent cannot reply and the
 page cannot post. Both fail loudly and `serve` resumes from the log.
 
@@ -151,6 +157,7 @@ the entry once; a duplicated message id appears once in the folded state.
 
 | When | Who | Why |
 |---|---|---|
+| 2026-10-01 19:36 | Martin Surkovsky | Drop a line cut short by a crash; refuse a log of another file |
 | 2026-10-01 06:29 | Martin Surkovsky | Derive reopening on fold, as the HLD now settles |
 | 2026-09-30 22:10 | Martin Surkovsky | Apply the CEO review: store lock, format version, review record; key the store by a path hash |
 | 2026-09-26 23:40 | Martin Surkovsky | Link the design by its new HLD name |
