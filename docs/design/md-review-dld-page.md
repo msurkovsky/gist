@@ -240,7 +240,7 @@ avoid.
 `anchor.js` (selection to anchor) and `margin.js` (card packing) hold the
 logic as pure functions, tested with `node --test` in `just ci`, with no
 npm dependencies. The DOM glue is covered by the host case in
-`docs/cases/md-review.md`.
+`docs/cases/gist-md-review.md`.
 
 ## Open questions
 

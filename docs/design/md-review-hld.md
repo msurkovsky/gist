@@ -5,7 +5,7 @@ Detail lives in DLDs next to this file: the review page in
 
 Status: draft, under review. Not built. A CEO review (2026-09-26, scope
 reduction) is applied; the eng review is next. Decisions that survive review
-move to ADRs; observable behavior moves to `docs/cases/md-review.md`.
+move to ADRs; observable behavior moves to `docs/cases/gist-md-review.md`.
 
 ## Problem
 
@@ -592,7 +592,7 @@ docs/
     md-review-hld.md               # this HLD; ongoing work, linked from TODO.md
     md-review-dld-page.md          # DLD: review page, cards, keys, re-anchoring
   cases/
-    md-review.md                   # behavior cases, written before implementation
+    gist-md-review.md              # behavior cases, written before implementation
   adr/
     0013-wake-the-agent-with-a-background-wait.md  # background wait over MCP
     0014-review-state-in-an-append-only-log.md     # event log, one writer, store

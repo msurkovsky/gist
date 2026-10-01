@@ -9,6 +9,7 @@ fixtures, and expected actions; their evaluation follows the skill contract.
 - [Doc review](gist-doc-review.md): trigger scope and review-only behavior.
 - [Repository checks](repository-checks.md): content validation and vendor integrity.
 - [Packaging](packaging.md): namespaced dependency references.
+- [Markdown review](gist-md-review.md): the review loop, its CLI, page and host.
 
 New and changed behavior uses this convention. Existing tool tests are not yet
 fully mapped; the remaining backfill is tracked in `TODO.md`.

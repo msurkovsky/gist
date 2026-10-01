@@ -47,7 +47,7 @@ deployment, so no full eng review; the steps below replace it, in order:
    and embedded mermaid (ADR 0015); 1 MiB cap; quote unique in the old
    version too; optional `<file>` on clients; a reply reopens a thread.
 3. Write the long-running subcommands section of `docs/tool-contract.md`
-   and the behavior cases in `docs/cases/md-review.md`, for approval.
+   and the behavior cases in `docs/cases/gist-md-review.md`, for approval.
 4. Implement, starting with the store, log and lock (ADR 0014).
 
 Slice 2, deferred by the review: vim key bindings; word-level track changes
