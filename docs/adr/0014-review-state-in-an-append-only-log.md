@@ -75,7 +75,9 @@ Current state is a fold over `events.jsonl`. Events: `review_started`,
 `review_delivered`, `round_started`, `thread_resolved`, `approved`; fields
 in the design. `review_started` carries `format: 1`; `round_started` and
 `approved` carry the version's hash. Whether a thread is orphaned is not
-an event: it is derived on fold against the current version.
+an event: it is derived on fold against the current version. Nor is
+reopening: a reviewer message after a thread's resolution or its `applied`
+outcome reopens it on fold.
 
 **One writer.** Only `serve` writes the store. It takes an exclusive OS
 file lock (`File::lock`) on `lock` before reading any state and holds it
@@ -149,6 +151,7 @@ the entry once; a duplicated message id appears once in the folded state.
 
 | When | Who | Why |
 |---|---|---|
+| 2026-10-01 06:29 | Martin Surkovsky | Derive reopening on fold, as the HLD now settles |
 | 2026-09-30 22:10 | Martin Surkovsky | Apply the CEO review: store lock, format version, review record; key the store by a path hash |
 | 2026-09-26 23:40 | Martin Surkovsky | Link the design by its new HLD name |
 | 2026-09-26 22:20 | Martin Surkovsky | Created |
