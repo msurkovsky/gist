@@ -154,6 +154,67 @@ pub fn run(file: &Path, announce: impl FnOnce(&Served)) -> Result<(), String> {
     shared.finish()
 }
 
+/// What a detached `serve` said before the caller returned.
+pub enum Detached {
+    /// Its first stdout line: the URL, rendered as asked.
+    Line(String),
+    /// It exited before printing one: its stderr and exit code.
+    Failed { stderr: String, code: u8 },
+}
+
+/// Run `serve` as a process of its own, so the review outlives the host
+/// task that started it; a host stops background tasks after at most two
+/// hours. Returns once the server has printed its URL or failed.
+pub fn detach(file: &Path, json: bool) -> Result<Detached, String> {
+    use std::io::{BufRead, BufReader, Read};
+    use std::process::{Command, Stdio};
+
+    let exe = std::env::current_exe().map_err(|err| format!("could not find gk: {err}"))?;
+    let mut command = Command::new(exe);
+    if json {
+        command.arg("--json");
+    }
+    // Pipes, not the caller's stdout and stderr: a host waits for those to
+    // close before it returns.
+    command
+        .args(["md-review", "serve", "--detached"])
+        .arg(file)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    // Its own process group, so a signal to the caller's group, such as
+    // Ctrl-C, does not reach it.
+    #[cfg(unix)]
+    std::os::unix::process::CommandExt::process_group(&mut command, 0);
+    let mut child = command
+        .spawn()
+        .map_err(|err| format!("could not start the review server: {err}"))?;
+
+    let mut line = String::new();
+    let stdout = child.stdout.take().expect("stdout is piped");
+    BufReader::new(stdout)
+        .read_line(&mut line)
+        .map_err(|err| format!("could not read the review server's URL: {err}"))?;
+    if !line.is_empty() {
+        return Ok(Detached::Line(line.trim_end().to_string()));
+    }
+    let mut stderr = String::new();
+    let _ = child
+        .stderr
+        .take()
+        .expect("stderr is piped")
+        .read_to_string(&mut stderr);
+    let status = child
+        .wait()
+        .map_err(|err| format!("could not wait for the review server: {err}"))?;
+    let code = status
+        .code()
+        .and_then(|code| u8::try_from(code).ok())
+        .filter(|&code| code != 0)
+        .unwrap_or(1);
+    Ok(Detached::Failed { stderr, code })
+}
+
 /// The address a client or browser uses, with the token.
 pub fn url(info: &ServerInfo) -> String {
     format!("http://127.0.0.1:{}/?token={}", info.port, info.token)

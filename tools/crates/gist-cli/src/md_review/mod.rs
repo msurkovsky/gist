@@ -17,6 +17,7 @@ use std::process::ExitCode;
 use std::time::Duration;
 
 use client::Client;
+use serve::Detached;
 use store::Outcome;
 
 const DEFAULT_LIMIT: usize = 25;
@@ -35,6 +36,15 @@ enum Command {
     Serve {
         /// The markdown file to review
         file: PathBuf,
+
+        /// Run the server in the background: print its URL and return
+        #[arg(long)]
+        detach: bool,
+
+        /// Run as the server `--detach` started, whose output nobody reads
+        /// once its URL is printed
+        #[arg(long, hide = true, conflicts_with = "detach")]
+        detached: bool,
     },
 
     /// Return the reviewer's submit or approval, waiting for one until the timeout
@@ -138,8 +148,30 @@ fn parse_span(text: &str) -> Result<Span, String> {
 /// its result before it is done.
 pub fn run(args: Args, json: bool) -> ExitCode {
     let done = match args.command {
-        Command::Serve { file } => {
-            serve::run(&file, |served| emit_line(served, json)).map(|()| ExitCode::from(exit::OK))
+        Command::Serve {
+            file, detach: true, ..
+        } => match serve::detach(&file, json) {
+            Ok(Detached::Line(line)) => {
+                println!("{line}");
+                Ok(ExitCode::from(exit::OK))
+            }
+            Ok(Detached::Failed { stderr, code }) => {
+                eprint!("{stderr}");
+                Ok(ExitCode::from(code))
+            }
+            Err(message) => Err(message),
+        },
+        Command::Serve { file, detached, .. } => {
+            let mut announced = false;
+            let served = serve::run(&file, |served| {
+                emit_line(served, json);
+                announced = true;
+            });
+            match served {
+                // The caller has returned and closed its end of stderr.
+                Err(_) if detached && announced => Ok(ExitCode::from(exit::FAILURE)),
+                served => served.map(|()| ExitCode::from(exit::OK)),
+            }
         }
         Command::Wait {
             file,
