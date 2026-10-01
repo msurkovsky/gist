@@ -85,8 +85,13 @@ Its first line says what happened. The output format, line by line:
    ```
 
    `next` snapshots the file as the version the user reads next, even
-   when nothing changed. End your turn with one line: the round, and how
-   many threads you applied and declined.
+   when nothing changed. The page shows it at once, without a reload.
+6. **Send the user back to the page.** End your turn saying the new round
+   is on the page now, with the URL, and how many threads you applied and
+   declined, for example: "Round 2 is ready on the page:
+   http://127.0.0.1:…/?token=… Applied 3, declined 1." Use the URL `serve`
+   printed; if you no longer have it, `gk md-review status docs/plan.md`
+   prints it on its `url` line. Never tell the user to reload.
 
 ### `review approved`
 
