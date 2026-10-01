@@ -7,6 +7,9 @@ mod check;
 mod doc;
 mod hook;
 mod init;
+// Built in increments; `serve` is the first caller and lifts this.
+#[allow(dead_code)]
+mod md_review;
 mod outline;
 mod skill;
 
