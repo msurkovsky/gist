@@ -1,4 +1,4 @@
-# 15. Serve the review page with `tiny_http`, long-poll and embedded mermaid
+# 15. Serve the review page with `axum`, long-poll and embedded mermaid
 
 Proposed — 2026-10-01.
 
@@ -13,23 +13,35 @@ round or an agent reply, `wait` about a submit or approval
 renders mermaid diagrams, and the reviewer may be offline.
 
 `gk` is a synchronous CLI with no async runtime. Release builds use LTO and
-a single codegen unit.
+a single codegen unit. The clients (`wait`, `reply`, `next`, `status`,
+`stop`) talk to `serve` over the same HTTP API, so they need a client too.
 
 ## Options
 
 ### Server
 
-- **`axum` on `tokio`.** Well maintained and the common choice, but it
-  brings an async runtime and a large dependency tree into a CLI that
-  serves a handful of requests, for one subcommand.
-- **Hand-written HTTP on `std::net`.** No dependency, but request parsing,
-  body limits and header checks are security code that `serve` would own,
-  and the Host check against DNS rebinding depends on parsing headers
-  right.
-- **`tiny_http` (chosen).** A small synchronous server: requests arrive on
-  a channel and a thread answers each. A thread per long-poll is fine for a
-  few clients. Its last release, 0.12.0, is from October 2022; a
-  maintained fork, `tiny_http_dh`, exists.
+Crate data from crates.io, checked 2026-10-01.
+
+- **`tiny_http`.** A small synchronous server, one thread per request. Its
+  last release, 0.12.0, is from October 2022. The maintained fork,
+  `tiny_http_dh`, has about 60 recent downloads; `rouille` is built on
+  `tiny_http`. A security-facing parser with no maintainer to fix it.
+- **Small synchronous servers** (`astra`, `may_minihttp`, `touche`): about
+  a thousand recent downloads each and one maintainer; no better.
+- **Hand-written HTTP on `std::net`, with `httparse`.** The parser is
+  hyper's and well fuzzed, but keep-alive, body framing, limits and
+  timeouts would be security code that `serve` owns, and the Host check
+  against DNS rebinding depends on getting them right.
+- **`hyper` directly.** Maintained and the base of the ecosystem, but
+  routing, middleware and in-process testing would be ours to write.
+- **`axum` on `tokio` (chosen).** Maintained by the tokio project, on
+  `hyper`. Routing, shared state, one middleware layer for the token and
+  Host checks, and routes tested without a socket
+  (`tower::ServiceExt::oneshot`). It costs an async runtime, a larger
+  dependency tree, longer builds and about 1–2 MB of binary. The runtime
+  stays inside `serve`; every other subcommand stays synchronous. Its
+  ecosystem also covers what later work may need (SSE, WebSocket,
+  compression) without a second server.
 
 ### Page updates
 
@@ -54,9 +66,11 @@ a single codegen unit.
 
 ## Decision
 
-`serve` uses `tiny_http`, one thread per request. The page and `wait` both
-long-poll with requests of about a minute. `mermaid.min.js` is pinned,
-checksummed and compiled into `gk` with `include_bytes!`.
+`serve` runs `axum` on a current-thread `tokio` runtime, built in `serve`
+alone. The page and `wait` both long-poll with requests of about a minute;
+a `tokio::sync::Notify` wakes them on a change. The clients use `ureq`, a
+synchronous HTTP client, so they need no runtime. `mermaid.min.js` is
+pinned, checksummed and compiled into `gk` with `include_bytes!`.
 
 ## Consequences
 
@@ -65,24 +79,25 @@ The binary grows by the size of mermaid: 3.4 MB for 11.x minified
 `Content-Encoding: gzip` would cut that to under 1 MB; left for when the
 size matters.
 
-`tiny_http` has not had a release since 2022. `serve` binds to 127.0.0.1
-only and checks the token and the Host header on every request, which
-limits what a parser bug exposes. Run `cargo audit` when adding it; if an
-advisory appears or the crate needs a fix, switch to the fork or another
-synchronous server behind the same HTTP API module.
+`tokio`, `axum` and `ureq` become dependencies of `gist-cli`. Async code
+is confined to the HTTP API module of `serve`; the store, log and renderer
+stay synchronous and are called from it, holding the log mutex only for
+an append or a fold.
 
-Long-poll requests hold a thread each; with one page and one `wait` that
-is two threads. A test flag shortens the poll interval, as for `wait`.
+A waiting long-poll is a parked task, not a thread. A test flag shortens
+the poll interval, as for `wait`.
 
 ## Verification
 
-Not built. End-to-end tests in `tools/crates/gist-cli/tests/md_review.rs`
-cover the long-poll returning on a change and on its interval, and the
-token and Host checks. `scripts/check.sh` or a test compares the embedded
-mermaid with the recorded checksum.
+Not built. Route tests call the `axum` router in process and cover the
+token and Host checks and stale-write 409s. End-to-end tests in
+`tools/crates/gist-cli/tests/md_review.rs` cover the long-poll returning
+on a change and on its interval, through `ureq`. `scripts/check.sh` or a
+test compares the embedded mermaid with the recorded checksum.
 
 ## Changelog
 
 | When | Who | Why |
 |---|---|---|
+| 2026-10-01 07:24 | Martin Surkovsky | Choose `axum` over `tiny_http`, unmaintained since 2022; name the client |
 | 2026-10-01 06:29 | Martin Surkovsky | Created |
