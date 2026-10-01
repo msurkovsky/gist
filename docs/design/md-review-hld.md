@@ -149,7 +149,7 @@ flowchart TB
   cli["<b>wait / reply / next</b><br/>[Container]"]:::ext
 
   subgraph serve["gk md-review serve [Container]"]
-    http["<b>HTTP API</b><br/>[tiny_http, localhost, token + Host check]<br/>Routes page and CLI requests,<br/>rejects writes to a stale round"]:::container
+    http["<b>HTTP API</b><br/>[axum, localhost, token + Host check]<br/>Routes page and CLI requests,<br/>rejects writes to a stale round"]:::container
     render["<b>Renderer</b><br/>[comrak with sourcepos]<br/>Markdown to HTML and per-block plain text,<br/>mermaid passed to the page"]:::container
     diff["<b>Differ</b><br/>[block-level]<br/>Marks changed, added and deleted blocks"]:::container
     anchor["<b>Re-anchorer</b><br/>[on rendered plain text]<br/>Moves open threads to the new version"]:::container
@@ -596,7 +596,7 @@ docs/
   adr/
     0013-wake-the-agent-with-a-background-wait.md  # background wait over MCP
     0014-review-state-in-an-append-only-log.md     # event log, one writer, store
-    0015-md-review-http-stack.md   # tiny_http, mermaid embedded, long-poll
+    0015-md-review-http-stack.md   # axum, mermaid embedded, long-poll
   tool-contract.md                 # new section: long-running subcommands
   architecture.md                  # one new row once md_review/ exists
 skills/

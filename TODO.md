@@ -43,7 +43,7 @@ deployment, so no full eng review; the steps below replace it, in order:
 1. ~~Validate the wake.~~ Done 2026-10-01 with a spike: a submit after
    31 minutes woke the agent. The host kills a task at its limit and says
    not to restart it, so `wait` now times out first (ADR 0013, HLD Settled).
-2. ~~Answer the open questions.~~ Done 2026-10-01: `tiny_http`, long-poll
+2. ~~Answer the open questions.~~ Done 2026-10-01: `axum`, long-poll
    and embedded mermaid (ADR 0015); 1 MiB cap; quote unique in the old
    version too; optional `<file>` on clients; a reply reopens a thread.
 3. Write the long-running subcommands section of `docs/tool-contract.md`
