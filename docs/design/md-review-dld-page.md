@@ -73,7 +73,7 @@ A card is one thread: an anchor, the human's message, replies.
 | draft | text field, Comment / Explain | save, cancel (text kept) |
 | pending | saved, not yet submitted | edit, delete (logged; 409 after submit) |
 | submitted | read-only, "agent is revising" | none |
-| applied | collapsed, "applied in round N" | expand, reopen |
+| applied | collapsed, "applied in round N" | expand, reopen (opens a reply) |
 | declined | open, agent's reason shown | reply, resolve |
 | answered | open, agent's answer shown | reply, resolve |
 | orphaned | top of margin, old quote shown | reply, resolve |
@@ -85,6 +85,9 @@ A card is one thread: an anchor, the human's message, replies.
   keeps it as a draft, as for any stale write.
 - **Replies** start a new message in the same thread, `kind` comment or
   question, and are pending until the next submit like any comment.
+- **Reopen** opens a reply field; the reply reopens the thread. There is no
+  reopen without a reason, and no reopen event: the fold treats a reviewer
+  message after resolution or an `applied` outcome as reopening.
 - **Resolved** threads collapse to a one-line stub; a filter in the margin
   hides them.
 - **Explain (parked).** The answer streams into the card. The card shows a
@@ -125,14 +128,16 @@ against the new version's rendered plain text, block by block, after
 collapsing runs of whitespace, never against markdown source:
 
 1. Exact `quote` with matching `prefix` and `suffix`.
-2. Exact `quote` alone, only when it occurs once in the new version under
-   the same `headings` path.
+2. Exact `quote` alone, only when it occurs once under the same
+   `headings` path in both the old and the new version.
 3. Otherwise the thread is **orphaned**: kept, shown at the top of the
    margin with the old quote, never silently dropped.
 
 Orphaned is not logged; it is derived when the log is folded against the
-current version. Step 2 never guesses between copies of a phrase; one gap
-remains, HLD open question 8.
+current version. Step 2 never guesses between copies of a phrase: a
+phrase copied in the old version and deleted at its original place is
+not unique in the old version, so the thread is orphaned rather than
+attached to the copy.
 
 Fuzzy matching is left out of slice 1; orphaning is honest and cheap.
 Revisit after real reviews show how often it happens.
