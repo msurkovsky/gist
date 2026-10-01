@@ -119,6 +119,7 @@ textarea {
   align-items: center;
 }
 .banner.stale { border-bottom-color: var(--off); }
+.banner.working { border-bottom-color: var(--ok); }
 .banner[hidden] { display: none; }
 
 /* Document and margin */

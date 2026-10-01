@@ -1314,6 +1314,7 @@ impl Live {
             round: review.round,
             version,
             phase,
+            delivered: review.submit.as_ref().and_then(|s| s.first_delivery),
             blocks: self.blocks(version)?.to_vec(),
             changes: self.changes(version)?,
             threads: self.thread_views()?,
@@ -1339,6 +1340,10 @@ struct PageView {
     round: u32,
     version: u32,
     phase: Phase,
+    /// When the agent received the submit; it revises from then until
+    /// `next`, with no `wait` running.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    delivered: Option<u64>,
     blocks: Vec<Block>,
     #[serde(skip_serializing_if = "Option::is_none")]
     changes: Option<Changes>,
@@ -2032,6 +2037,21 @@ mod tests {
         let (_, changed) = fixture.call("GET", &format!("/api/review?after={seq}&hold=30"), None);
         assert!(started.elapsed() < Duration::from_secs(5));
         assert_eq!(changed["threads"][0]["id"], "t1");
+    }
+
+    #[test]
+    fn the_page_learns_when_the_agent_has_the_submit() {
+        let fixture = fixture();
+        fixture.comment(1, "m-1");
+        fixture.submit(1);
+        let (_, view) = fixture.call("GET", "/api/review", None);
+        assert_eq!(view["phase"], "submitted");
+        assert!(view.get("delivered").is_none(), "not yet delivered");
+
+        let (status, _) = fixture.call("GET", "/api/wait?hold=1&limit=5", None);
+        assert_eq!(status, StatusCode::OK);
+        let (_, view) = fixture.call("GET", "/api/review", None);
+        assert!(view["delivered"].as_u64().unwrap() > 0);
     }
 
     #[test]
