@@ -40,9 +40,9 @@ HLD, the DLD and ADRs 0013 and 0014 carry them. Record, outside the repo:
 The CEO review covered architecture, errors, security, tests and
 deployment, so no full eng review; the steps below replace it, in order:
 
-1. Validate the wake: a background task that exits after 30 minutes or
-   more wakes the Claude Code agent with its output, and is not cut off.
-   ADR 0013 and the whole loop rest on it; if it fails, back to the design.
+1. ~~Validate the wake.~~ Done 2026-10-01 with a spike: a submit after
+   31 minutes woke the agent. The host kills a task at its limit and says
+   not to restart it, so `wait` now times out first (ADR 0013, HLD Settled).
 2. Answer the open questions: HLD open questions 3 (HTTP stack and mermaid
    size, an ADR) and 7–9 (size cap, a copied phrase in re-anchoring, which
    review a client means with two live); reopening a thread has no log
