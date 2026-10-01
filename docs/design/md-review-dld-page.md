@@ -36,12 +36,13 @@ visible next to its context.
 - **Toolbar.** Fixed at the top: file, round, pending count, Show changes,
   Submit review, Approve, the connection indicator. Behaviour of Submit and
   Approve as in the HLD. The vim mode indicator joins it in slice 2.
-- **Connection indicator.** Always visible, one of three states:
+- **Connection indicator.** Always visible, one of four states:
 
   | State | When | Shown as |
   |---|---|---|
   | agent listening | a `wait` polled within 90 s | green dot |
-  | agent away | `serve` answers, no `wait` for 90 s or more | amber dot, "agent away since 14:02; your submit is kept", the resume command with a copy button |
+  | agent revising | the agent has the submit and has not run `next` yet | green dot; it runs no `wait` meanwhile, so this is not away |
+  | agent away | `serve` answers, no `wait` for 90 s or more, and no submit being revised | amber dot, "agent away since 14:02; your submit is kept", the request that resumes the review ("Continue the review of docs/foo.md with me.") with a copy button |
   | server offline | the page cannot reach `serve` | red dot, "reconnecting…" |
 
   The 90 s grace hides the routine `wait` restart after a timeout, which
@@ -50,8 +51,15 @@ visible next to its context.
   old port when free, so an open tab finds it. The page cannot wake the
   agent; it can only say how.
 - **Banners.** Below the toolbar, one at a time, most severe first: write
-  refused because the page is stale (reload, drafts kept); working file
-  differs from the version on screen. Drafts survive both.
+  refused because the page is stale (reload, drafts kept); the round is
+  submitted; working file differs from the version on screen. Drafts
+  survive all of them.
+- **Revising banner.** From submit until the next round it says what the
+  agent is doing: before it has the submit, "Submitted. The agent gets it
+  when it next listens."; after, "The agent is revising since 14:02 · 1 of
+  2 comments answered." Both add that the next round appears by itself.
+  The count rises as replies arrive. A crashed agent leaves the banner up;
+  the time since is how the reviewer tells.
 - **Document column.** The rendered markdown, readable width (about 80ch),
   mermaid diagrams inline. Anchored text is highlighted; the focused
   thread's highlight is stronger.
@@ -72,7 +80,7 @@ A card is one thread: an anchor, the human's message, replies.
 |---|---|---|
 | draft | text field, Comment / Explain | save, cancel (text kept) |
 | pending | saved, not yet submitted | edit, delete (logged; 409 after submit) |
-| submitted | read-only, "agent is revising" | none |
+| submitted | read-only, "sent"; the revising banner says the rest | none |
 | applied | collapsed, "applied in round N" | expand, reopen (opens a reply) |
 | declined | open, agent's reason shown | reply, resolve |
 | answered | open, agent's answer shown | reply, resolve |
