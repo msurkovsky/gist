@@ -286,13 +286,14 @@ function drawConnection() {
   }
   node.className = "connection away";
   node.replaceChildren(dot, view.agent.last_wait ? `agent away since ${clock(view.agent.last_wait)}` : "agent not listening yet");
-  // The page cannot wake the agent; it can only say how.
-  const command = `gk md-review wait ${view.file} --timeout 110m`;
+  // The page cannot wake the agent; it can only say how. The skill picks
+  // the review up from this request, in any session.
+  const request = `Continue the review of ${view.file} with me.`;
   resume.replaceChildren(
     view.phase === "submitted" ? "Your submit is kept. " : "",
-    "To resume, ask the agent to run",
-    el("code", {}, command),
-    el("button", { type: "button", class: "link", onclick: () => navigator.clipboard?.writeText(command) }, "copy"),
+    "To resume, tell the agent",
+    el("code", {}, request),
+    el("button", { type: "button", class: "link", onclick: () => navigator.clipboard?.writeText(request) }, "copy"),
   );
   resume.hidden = false;
 }
