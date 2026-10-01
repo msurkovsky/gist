@@ -30,7 +30,8 @@ exits 0 without starting another server or appending to the log.
 
 With a `server.json` whose process is gone, `serve` replaces it and
 resumes from the log: same threads, round and versions. It binds the old
-port when free, otherwise a new one.
+port when free, otherwise a new one, and keeps the old token, so the URL
+stays the same when the port does.
 
 ### serve-refuse
 
@@ -45,7 +46,9 @@ unknown to this `gk` (the log is left untouched).
 
 ### stop
 
-`stop` ends the server and keeps the store; a later `serve` resumes it.
+`stop` ends the server and keeps the store, `server.json` included;
+clients then say no server runs. A later `serve` resumes it at the same
+URL, and a page left open reconnects and is answered at once.
 
 ## Clients
 

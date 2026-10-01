@@ -54,12 +54,12 @@ MR, such as backup refs before a rewrite, reply format, and supersede order, are
 ## Build
 
 Needs a current stable Rust toolchain (including rustfmt and Clippy), a C compiler,
-Git, Bash, and `just`. CI runs on Linux; macOS remains unverified. Josh is only
+Git, Bash, `just`, and Node.js 20 or later for the page tests. CI runs on Linux; macOS remains unverified. Josh is only
 needed for importing vendors or using views. Repository checks need full Git
 history to resolve recorded imports.
 
 ```bash
-just ci        # fmt, clippy, test, scripts/check.sh
+just ci        # fmt, clippy, test, node --test, scripts/check.sh
 just install   # put gk on PATH
 ```
 

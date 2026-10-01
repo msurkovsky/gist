@@ -47,6 +47,9 @@ Slice 2, designed but deferred:
 - **Block pairing by content.** Slice 1 pairs changed blocks in order, so a
   paragraph inserted before an edited one shows as changed and the edited
   one as added. Both are still marked.
+- **Images with relative paths.** `serve` serves only the page and its own
+  assets, so an image the markdown names by a repository path does not
+  load. Serving them needs a confined path under the file's directory.
 
 Parked, designed for but not built:
 
@@ -257,8 +260,9 @@ sequenceDiagram
 `serve` on a file that already has a live server does not start a second one:
 it cannot take the store lock, so it prints the existing URL and exits 0. A
 stale `server.json` whose process is gone is replaced, and the review
-resumes from the log, on the old port when it is free, so a tab left open
-reconnects.
+resumes from the log, on the old port when it is free and with the old
+token, so a tab left open reconnects. `stop` keeps `server.json` for this;
+clients find no process behind it and say no server runs.
 
 `serve` exits 1 and writes nothing when the store's log has a format this
 `gk` does not know. A client whose `gk` version differs from the one in
@@ -553,11 +557,14 @@ Two additions, both omitted when they do not apply:
 
 Every request needs the Host `127.0.0.1:<port>` (else 403) and the token,
 as `Authorization: Bearer` or the `token` query parameter (else 401).
+`GET /assets/*` alone needs no token: a browser loads module imports
+without the page's query string, and the assets hold nothing secret.
 A refusal answers `{"message": "…"}` and appends nothing.
 
 | Route | Caller | Does |
 |---|---|---|
 | `GET /` | browser | the page, with a CSP that allows only `serve`, and `Referrer-Policy: no-referrer` since the URL holds the token |
+| `GET /assets/{name}` | browser | the page's scripts, styles, icon and the embedded `mermaid.min.js` |
 | `GET /api/review?after&hold` | page | everything the page draws: blocks, changes since the previous version, threads anchored to the current version, phase, agent presence, drift; at once when its `seq` differs from `after`, else after `hold` (at most 60 s) |
 | `POST /api/threads` | page | a comment: a new thread with an `anchor`, or a reply with a `thread`; the page picks the message id, so a retry appends nothing |
 | `PATCH`, `DELETE /api/messages/{id}` | page | edit or delete a pending comment |
@@ -597,14 +604,17 @@ section covers them.
 ## Security
 
 - Bind to 127.0.0.1 only; random port; random token in the URL and in
-  `server.json` (0600). Every request carries the token.
+  `server.json` (0600). Every request carries the token, except reading
+  the page's own assets under `/assets/`; the Host check covers those too.
 - Check the `Host` header against `127.0.0.1:<port>` to refuse DNS rebinding.
 - Any local process that reads the token could post comments the agent acts
   on, or start answerer runs that cost model calls. Accepted for a
   single-user machine; the token keeps other browser tabs out.
 - Rendered markdown is untrusted: no raw HTML passthrough, `javascript:`
   links stripped, mermaid in strict security mode, no external requests
-  from the page.
+  from the page. The CSP allows scripts, images and requests from `serve`
+  only. It allows inline styles, which mermaid writes into its diagrams; a
+  style cannot send anything out under that policy.
 - The bundled `mermaid.min.js` is pinned to a version, with its checksum
   recorded in the repository, and compiled into `gk`
   ([ADR 0015](../adr/0015-md-review-http-stack.md)).
