@@ -152,8 +152,8 @@ Revisit after real reviews show how often it happens.
 - A changed or added block gets a bar in the left gutter and a light tint.
 - A deleted block shows as a struck-through stub where it was, expandable
   to its old text.
-- A changed mermaid block shows the new diagram with a "changed" marker and
-  the old source on demand.
+- A changed block, a mermaid diagram included, shows its new form with a
+  "changed" marker and its old source on demand.
 - Slice 2 adds Word-style track changes inside a changed block: inserted
   words underlined in green, deleted words struck through in red.
 - An applied thread links to the change that applied it when the server can

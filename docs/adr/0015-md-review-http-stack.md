@@ -75,7 +75,9 @@ pinned, checksummed and compiled into `gk` with `include_bytes!`.
 ## Consequences
 
 The binary grows by the size of mermaid: 3.4 MB for 11.x minified
-(measured 2026-10-01). Compressing it in the binary and serving it with
+(measured 2026-10-01). Measured on the release build: `axum`, `tokio` and
+`ureq` added 2.4 MB, above the 1–2 MB estimate; mermaid and the page
+added 3.6 MB, for 11.7 MB in all. Compressing it in the binary and serving it with
 `Content-Encoding: gzip` would cut that to under 1 MB; left for when the
 size matters.
 
@@ -89,15 +91,18 @@ the poll interval, as for `wait`.
 
 ## Verification
 
-Not built. Route tests call the `axum` router in process and cover the
-token and Host checks and stale-write 409s. End-to-end tests in
+Route tests in `md_review/serve.rs` call the `axum` router in process and
+cover the token and Host checks, the assets served without the token,
+and stale-write 409s. End-to-end tests in
 `tools/crates/gist-cli/tests/md_review.rs` cover the long-poll returning
-on a change and on its interval, through `ureq`. `scripts/check.sh` or a
-test compares the embedded mermaid with the recorded checksum.
+on a change, on its interval, and at once to a page open across a
+restart, through `ureq`. A test compares the embedded `mermaid.min.js`,
+11.17.2, with the checksum in `assets/mermaid.min.js.sha256`.
 
 ## Changelog
 
 | When | Who | Why |
 |---|---|---|
+| 2026-10-01 21:47 | Martin Surkovsky | Pin mermaid 11.17.2 with a checksum test; record measured sizes |
 | 2026-10-01 07:24 | Martin Surkovsky | Choose `axum` over `tiny_http`, unmaintained since 2022; name the client |
 | 2026-10-01 06:29 | Martin Surkovsky | Created |
