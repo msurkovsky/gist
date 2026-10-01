@@ -378,6 +378,123 @@ fn serve_refuses_a_log_of_an_unknown_format_and_leaves_it() {
     assert_eq!(std::fs::read_to_string(&log).unwrap(), newer);
 }
 
+/// Run `serve --detach` to completion, failing the test if it holds its
+/// output open, as it would if the server inherited it.
+fn detach(repo: &Repo, args: &[&str]) -> (i32, String, String) {
+    let mut command_args = vec!["md-review", "serve", "--detach"];
+    command_args.extend_from_slice(args);
+    let mut child = repo
+        .command(&command_args)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut stdout = child.stdout.take().unwrap();
+    let mut stderr = child.stderr.take().unwrap();
+    let (sender, receiver) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let (mut out, mut err) = (String::new(), String::new());
+        let _ = std::io::Read::read_to_string(&mut stdout, &mut out);
+        let _ = std::io::Read::read_to_string(&mut stderr, &mut err);
+        let _ = sender.send((out, err));
+    });
+    let (out, err) = receiver
+        .recv_timeout(Duration::from_secs(10))
+        .expect("serve --detach returns and closes its output");
+    let code = child.wait().unwrap().code().unwrap_or(-1);
+    (code, out, err)
+}
+
+/// A detached server, killed when dropped.
+struct Detached(u64);
+
+impl Drop for Detached {
+    fn drop(&mut self) {
+        let _ = Command::new("kill")
+            .arg(self.0.to_string())
+            .stderr(Stdio::null())
+            .status();
+    }
+}
+
+fn alive(pid: u64) -> bool {
+    Command::new("kill")
+        .args(["-0", &pid.to_string()])
+        .stderr(Stdio::null())
+        .status()
+        .unwrap()
+        .success()
+}
+
+// Case: docs/cases/gist-md-review.md#serve-detach
+#[cfg(unix)]
+#[test]
+fn a_detached_serve_prints_the_url_and_runs_on_in_its_own_group() {
+    let repo = Repo::new();
+    let (code, stdout, stderr) = detach(&repo, &["docs/foo.md"]);
+    assert_eq!(code, 0, "{stderr}");
+    let info = server_json(&repo);
+    let pid = info["pid"].as_u64().unwrap();
+    let _server = Detached(pid);
+    let url = format!(
+        "http://127.0.0.1:{}/?token={}",
+        info["port"],
+        info["token"].as_str().unwrap()
+    );
+    assert_eq!(stdout, format!("{url}\n"), "only the URL");
+    assert_eq!(stderr, "");
+
+    let group = Command::new("ps")
+        .args(["-o", "pgid=", "-p", &pid.to_string()])
+        .output()
+        .unwrap();
+    let group = String::from_utf8_lossy(&group.stdout).trim().to_string();
+    assert_eq!(group, pid.to_string(), "its own process group");
+
+    let status = repo.data(&["md-review", "status", "docs/foo.md"]);
+    assert_eq!(status["url"], url);
+    let (code, again, _) = detach(&repo, &["docs/foo.md"]);
+    assert_eq!(code, 0);
+    assert_eq!(again, stdout, "a live server is reused");
+
+    assert_eq!(repo.gk(&["md-review", "stop", "docs/foo.md"]).0, 0);
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while alive(pid) {
+        assert!(Instant::now() < deadline, "serve still running");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
+// Case: docs/cases/gist-md-review.md#serve-detach
+#[test]
+fn a_detached_serve_prints_its_json_result_on_one_line() {
+    let repo = Repo::new();
+    let (code, stdout, _) = detach(&repo, &["docs/foo.md", "--json"]);
+    assert_eq!(code, 0);
+    let _server = Detached(server_json(&repo)["pid"].as_u64().unwrap());
+    assert_eq!(stdout.lines().count(), 1, "{stdout}");
+    let value: Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(value["data"]["file"], "docs/foo.md");
+    assert_eq!(value["data"]["reused"], false);
+}
+
+// Case: docs/cases/gist-md-review.md#serve-detach
+#[test]
+fn a_detached_serve_reports_a_refusal_with_its_exit_code() {
+    let repo = Repo::new();
+    let (code, stdout, stderr) = detach(&repo, &["docs/none.md"]);
+    assert_eq!(code, 1);
+    assert_eq!(stdout, "");
+    assert!(stderr.starts_with("error: "), "{stderr}");
+    assert!(stderr.contains("no such file"), "{stderr}");
+
+    let (code, _, stderr) = detach(&repo, &["docs/none.md", "--json"]);
+    assert_eq!(code, 1);
+    let value: Value = serde_json::from_str(&stderr).expect("error envelope on stderr");
+    assert_eq!(value["status"], "error");
+    assert!(!repo.path().join(".md-review").exists());
+}
+
 // Case: docs/cases/gist-md-review.md#stop
 #[test]
 fn stop_ends_the_server_keeps_the_store_and_serve_resumes_it() {
