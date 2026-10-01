@@ -325,7 +325,7 @@ fn a_dead_server_is_replaced_and_the_review_resumes_on_its_port() {
 
     let resumed = repo.serve("docs/foo.md");
     assert_eq!(resumed.port, port, "the old port was free");
-    assert_ne!(resumed.token, server.token);
+    assert_eq!(resumed.token, server.token, "an open page reconnects");
     assert_eq!(server_json(&repo)["pid"], resumed.child.id());
     let (_, view) = resumed.page("GET", "/api/review", None);
     assert_eq!(view["round"], 1);
@@ -389,11 +389,34 @@ fn stop_ends_the_server_keeps_the_store_and_serve_resumes_it() {
     assert!(stdout.contains("the review is kept"), "{stdout}");
     assert_eq!(server.exit(Duration::from_secs(5)), 0);
     assert!(repo.store().join("events.jsonl").is_file());
-    assert!(!repo.store().join("server.json").exists());
+    let (code, message) = repo.error(&["md-review", "status", "docs/foo.md"]);
+    assert_eq!(code, 1);
+    assert!(message.contains("no review server runs"), "{message}");
 
+    // The page's URL still works: same port when free, same token.
     let resumed = repo.serve("docs/foo.md");
+    assert_eq!(resumed.url, server.url);
     let (_, view) = resumed.page("GET", "/api/review", None);
     assert_eq!(view["threads"][0]["id"], "t1");
+}
+
+// Case: docs/cases/gist-md-review.md#stop
+#[test]
+fn a_page_open_across_a_restart_is_answered_at_once() {
+    let repo = Repo::new();
+    let mut server = repo.serve("docs/foo.md");
+    let (_, before) = server.page("GET", "/api/review", None);
+    repo.gk(&["md-review", "stop", "docs/foo.md"]);
+    server.exit(Duration::from_secs(5));
+
+    // Nothing changed, yet the page must learn it reached a new server
+    // rather than wait out its hold on the old one's numbering.
+    let resumed = repo.serve("docs/foo.md");
+    let started = std::time::Instant::now();
+    let uri = format!("/api/review?after={}&hold=30", before["seq"]);
+    let (_, view) = resumed.page("GET", &uri, None);
+    assert!(started.elapsed() < Duration::from_secs(10));
+    assert_ne!(view["seq"], before["seq"]);
 }
 
 #[cfg(unix)]

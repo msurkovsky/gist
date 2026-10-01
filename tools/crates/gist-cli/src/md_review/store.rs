@@ -744,18 +744,6 @@ impl Store {
         self.write_file(SERVER, &bytes, true)
     }
 
-    /// Remove `server.json` when the server stops, so a client finds no
-    /// server rather than a dead one.
-    pub fn clear_server(&self) -> Result<(), String> {
-        let rel = self.location.store_rel().join(SERVER);
-        refuse_symlink(&self.location.root, &rel)?;
-        match std::fs::remove_file(self.location.root.join(&rel)) {
-            Ok(()) => Ok(()),
-            Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(()),
-            Err(err) => Err(format!("could not remove {}: {err}", rel.display())),
-        }
-    }
-
     /// Write the review record `name` under `.md-review/records/`, outside
     /// the store so it outlives it, and return its path relative to the
     /// root. An existing record of that name is kept: it was written for

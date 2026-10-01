@@ -1,0 +1,235 @@
+/* The review page: the document on the left, comment cards in a margin on
+   the right, a toolbar on top. docs/design/md-review-dld-page.md#layout. */
+
+:root {
+  --bg: #ffffff;
+  --fg: #1f2328;
+  --muted: #59636e;
+  --line: #d1d9e0;
+  --panel: #f6f8fa;
+  --card: #ffffff;
+  --accent: #0969da;
+  --accent-fg: #ffffff;
+  --mark: rgba(255, 200, 40, 0.35);
+  --mark-strong: rgba(255, 170, 0, 0.6);
+  --changed: #0969da;
+  --changed-tint: rgba(9, 105, 218, 0.06);
+  --deleted: #b42318;
+  --ok: #1a7f37;
+  --away: #9a6700;
+  --off: #cf222e;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d1117;
+    --fg: #e6edf3;
+    --muted: #9198a1;
+    --line: #3d444d;
+    --panel: #151b23;
+    --card: #1b222c;
+    --accent: #4493f8;
+    --accent-fg: #0d1117;
+    --mark: rgba(210, 160, 30, 0.3);
+    --mark-strong: rgba(230, 170, 20, 0.55);
+    --changed: #4493f8;
+    --changed-tint: rgba(68, 147, 248, 0.08);
+    --deleted: #f47067;
+    --ok: #3fb950;
+    --away: #d29922;
+    --off: #f85149;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html { scroll-padding-top: calc(var(--header-height, 48px) + 16px); }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+}
+
+button, input, textarea { font: inherit; color: inherit; }
+
+a { color: var(--accent); }
+
+button {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  border-radius: 6px;
+  padding: 4px 12px;
+  cursor: pointer;
+}
+button:disabled { opacity: 0.5; cursor: default; }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+button.link { border: none; background: none; padding: 0; color: var(--accent); }
+
+textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+  padding: 6px 8px;
+  resize: vertical;
+}
+
+.muted { color: var(--muted); }
+.error { color: var(--off); }
+
+/* Toolbar */
+
+.top {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px 16px;
+  min-height: 48px;
+  padding: 6px 16px;
+  flex-wrap: wrap;
+}
+.title { font-weight: 600; overflow-wrap: anywhere; }
+.actions { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+.toggle { display: flex; gap: 4px; align-items: center; font-size: 14px; }
+.drawer-toggle { display: none; }
+
+.connection { display: flex; gap: 6px; align-items: center; font-size: 14px; }
+.connection .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.connection.listening .dot { background: var(--ok); }
+.connection.away .dot { background: var(--away); }
+.connection.offline .dot { background: var(--off); }
+.resume { flex-basis: 100%; font-size: 14px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.resume[hidden] { display: none; }
+.resume code { font-size: 13px; background: var(--bg); padding: 1px 4px; border-radius: 4px; overflow-wrap: anywhere; }
+
+.banner {
+  padding: 8px 16px;
+  border-top: 1px solid var(--line);
+  border-bottom: 2px solid var(--away);
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.banner.stale { border-bottom-color: var(--off); }
+.banner[hidden] { display: none; }
+
+/* Document and margin */
+
+.review {
+  display: grid;
+  grid-template-columns: minmax(0, 80ch) minmax(280px, 360px);
+  gap: 32px;
+  justify-content: center;
+  padding: 24px 16px 96px;
+}
+
+.document { min-width: 0; position: relative; }
+.document .placeholder { color: var(--muted); }
+.document .block { position: relative; padding-left: 12px; margin-left: -12px; border-left: 3px solid transparent; }
+.document pre { overflow-x: auto; background: var(--panel); padding: 12px; border-radius: 6px; }
+.document code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.9em; }
+.document table { border-collapse: collapse; }
+.document th, .document td { border: 1px solid var(--line); padding: 4px 10px; }
+.document img { max-width: 100%; }
+.document blockquote { margin-left: 0; padding-left: 16px; border-left: 4px solid var(--line); color: var(--muted); }
+
+.document.changes .block.changed,
+.document.changes .block.added { border-left-color: var(--changed); background: var(--changed-tint); }
+/* A pseudo-element, so the tag is not part of the block's text. */
+.document.changes .block[data-change]::after { content: attr(data-change); position: absolute; right: 100%; margin-right: 8px; top: 2px; font-size: 12px; color: var(--changed); }
+.document:not(.changes) .deleted,
+.document:not(.changes) .was { display: none; }
+.deleted { margin: 8px 0 8px -12px; padding-left: 9px; border-left: 3px solid var(--deleted); color: var(--deleted); font-size: 14px; }
+.deleted > summary { text-decoration: line-through; cursor: pointer; }
+.deleted .old { text-decoration: line-through; color: var(--muted); }
+.was { font-size: 14px; color: var(--muted); }
+.was > summary { cursor: pointer; }
+
+.block.whole-anchor { outline: 2px solid var(--mark); outline-offset: 2px; }
+.block.whole-anchor.focused { outline-color: var(--mark-strong); }
+
+.mermaid-diagram { overflow-x: auto; }
+.mermaid-error { color: var(--off); font-size: 14px; }
+
+::highlight(threads) { background-color: var(--mark); }
+::highlight(focused) { background-color: var(--mark-strong); }
+
+.margin { position: relative; min-height: 100%; }
+.margin .filter { font-size: 14px; display: flex; gap: 6px; align-items: center; margin-bottom: 8px; }
+.margin .hint { color: var(--muted); font-size: 14px; }
+.orphans { margin-bottom: 12px; display: grid; gap: 8px; }
+.cards { position: relative; }
+.cards.packed .card { position: absolute; left: 0; right: 0; }
+.connector { position: absolute; left: -16px; width: 12px; border-top: 2px solid var(--line); border-left: 2px solid var(--line); }
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 14px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  transition: top 0.12s ease-out;
+}
+.card.focused { border-color: var(--accent); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15); }
+.card.orphaned { border-style: dashed; }
+.card .head { display: flex; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 12px; }
+.card .quote { margin: 4px 0; padding-left: 8px; border-left: 3px solid var(--mark-strong); color: var(--muted); white-space: pre-wrap; max-height: 6em; overflow: hidden; }
+.card .message { margin-top: 6px; }
+.card .message .who { font-weight: 600; font-size: 12px; }
+.card .message .body { white-space: pre-wrap; overflow-wrap: anywhere; }
+.card .message.agent { border-left: 3px solid var(--accent); padding-left: 8px; }
+.card .row { display: flex; gap: 8px; margin-top: 6px; flex-wrap: wrap; align-items: center; }
+.card .unsaved { color: var(--away); font-size: 12px; }
+.card.stub { padding: 4px 10px; }
+
+/* Dialogs */
+
+dialog {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--fg);
+  width: min(560px, calc(100vw - 32px));
+}
+dialog::backdrop { background: rgba(0, 0, 0, 0.35); }
+dialog h2 { margin-top: 0; font-size: 18px; }
+dialog .buttons { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
+dialog ul { padding-left: 20px; font-size: 14px; }
+
+/* After approval */
+
+.final { max-width: 640px; margin: 64px auto; padding: 0 16px; }
+.final code { overflow-wrap: anywhere; }
+
+/* Narrow window: the margin is a drawer opened from the toolbar. */
+
+@media (max-width: 1000px) {
+  .review { grid-template-columns: minmax(0, 1fr); }
+  .drawer-toggle { display: inline-block; }
+  .margin {
+    position: fixed;
+    top: var(--header-height, 48px);
+    right: 0;
+    bottom: 0;
+    width: min(380px, 100vw);
+    overflow-y: auto;
+    padding: 12px;
+    background: var(--panel);
+    border-left: 1px solid var(--line);
+    transform: translateX(100%);
+    transition: transform 0.15s;
+    z-index: 8;
+  }
+  body.drawer .margin { transform: none; }
+  .cards .card { position: static; margin-bottom: 8px; }
+  .connector { display: none; }
+}

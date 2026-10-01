@@ -14,6 +14,10 @@ release:
 test:
     cargo test --manifest-path {{tools}}/Cargo.toml
 
+# The review page's pure functions; Node only, no npm packages.
+test-page:
+    node --test {{tools}}/crates/gist-cli/src/md_review/assets/*.test.js
+
 fmt:
     cargo fmt --manifest-path {{tools}}/Cargo.toml --all
 
@@ -22,7 +26,7 @@ lint:
     cargo clippy --manifest-path {{tools}}/Cargo.toml --all-targets -- -D warnings
 
 # Everything CI runs, locally.
-ci: lint test check
+ci: lint test test-page check
 
 # Put gk on PATH.
 install:
