@@ -34,12 +34,24 @@ visible next to its context.
 ```
 
 - **Toolbar.** Fixed at the top: file, round, pending count, Show changes,
-  Submit review, Approve. Behaviour of the last two as in the HLD. The vim
-  mode indicator joins it in slice 2.
-- **Banners.** Below the toolbar, one at a time, most severe first: server
-  unreachable; write refused because the page is stale (reload, drafts
-  kept); no agent listening while a submit is pending; working file
-  differs from the version on screen. Drafts survive every one of them.
+  Submit review, Approve, the connection indicator. Behaviour of Submit and
+  Approve as in the HLD. The vim mode indicator joins it in slice 2.
+- **Connection indicator.** Always visible, one of three states:
+
+  | State | When | Shown as |
+  |---|---|---|
+  | agent listening | a `wait` polled within 90 s | green dot |
+  | agent away | `serve` answers, no `wait` for 90 s or more | amber dot, "agent away since 14:02; your submit is kept", the resume command with a copy button |
+  | server offline | the page cannot reach `serve` | red dot, "reconnecting…" |
+
+  The 90 s grace hides the routine `wait` restart after a timeout, which
+  takes seconds. Offline, the page retries with backoff (1 s doubling to
+  30 s) and returns to the right state by itself; `serve` resumes on its
+  old port when free, so an open tab finds it. The page cannot wake the
+  agent; it can only say how.
+- **Banners.** Below the toolbar, one at a time, most severe first: write
+  refused because the page is stale (reload, drafts kept); working file
+  differs from the version on screen. Drafts survive both.
 - **Document column.** The rendered markdown, readable width (about 80ch),
   mermaid diagrams inline. Anchored text is highlighted; the focused
   thread's highlight is stronger.
@@ -67,7 +79,10 @@ A card is one thread: an anchor, the human's message, replies.
 | orphaned | top of margin, old quote shown | reply, resolve |
 
 - **Draft buffer.** Typing is kept in localStorage per file and anchor until
-  the card is saved, per ADR 0014. A reload restores open drafts.
+  `serve` has logged the card, per ADR 0014. A reload restores open drafts.
+  A card saved while the server is offline stays in the buffer, marked
+  "not saved yet", and is sent when the page reconnects; a 409 on resend
+  keeps it as a draft, as for any stale write.
 - **Replies** start a new message in the same thread, `kind` comment or
   question, and are pending until the next submit like any comment.
 - **Resolved** threads collapse to a one-line stub; a filter in the margin
