@@ -220,14 +220,15 @@ docs/foo.md · round 2 · 3 pending   [Show changes ✓]  [Submit review]  [Appr
   the confirm then warns that the approval covers the version on screen,
   not the agent's edits in progress. With pending comments the dialog lists
   them and offers "Discard and approve" or going back to submit them.
-- **Between submit and the next round** the page is read-only and shows
-  "agent is revising". A comment written now would anchor to a version that
-  is about to change.
+- **Between submit and the next round** the page is read-only. A banner
+  says whether the agent has the submit yet, since when it revises, and
+  how many comments it has answered; the next round appears by itself. A
+  comment written now would anchor to a version that is about to change.
 - **Show changes** marks the blocks changed since the previous version;
   deleted blocks show as struck stubs.
-- **Connection indicator**, always visible: agent listening, agent away
-  (with the command that resumes the review in Claude Code), or server
-  offline. The page reconnects to `serve` by itself and keeps unsent drafts
+- **Connection indicator**, always visible: agent listening, agent
+  revising, agent away (with the request that resumes the review, to give
+  the agent), or server offline. The page reconnects to `serve` by itself and keeps unsent drafts
   in browser storage until `serve` accepts them.
 - **Banners** say when the working file differs from the version on
   screen, and when a write was refused because the page is stale (reload;
@@ -326,7 +327,8 @@ version so the round count stays honest.
   them. Delivery is at least once, never silently dropped.
 - **Presence.** The page shows the agent as away when no `wait` has polled
   for 90 s. The grace period covers the restart after a `wait` timeout, so
-  the routine restart never shows. `status` shows waiters and an
+  the routine restart never shows. An agent that has the submit runs no
+  `wait` until `next`, so it shows as revising, not away. `status` shows waiters and an
   undelivered submit.
 - **File drift.** Each version is hashed. When the working file differs
   from the version the reviewer read by the time the review is delivered,
