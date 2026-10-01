@@ -53,8 +53,10 @@ and the agent's normal tools do the rest.
 
 The agent channel for slice 1 is the `gk` CLI, not MCP:
 
-- `gk md-review serve <file>` runs as a background task for the whole review
-  and prints the URL as its first line of stdout.
+- `gk md-review serve <file> --detach` starts the server as a process of
+  its own and returns once it has printed the URL. The server must run for
+  the whole review, and the host stops a background task at its limit, so
+  it is not a host task; `wait` is the only one.
 - `gk md-review wait --timeout <dur>` returns a pending submit or approval
   at once, or blocks until one arrives, prints it, and exits 0. When the
   timeout fires first it prints a `timeout` event and exits 0; the skill
@@ -148,6 +150,7 @@ with a test flag instead of sleeping.
 
 | When | Who | Why |
 |---|---|---|
+| 2026-10-01 22:28 | Martin Surkovsky | `serve` detaches instead of running as a background task, which the host would stop at its limit |
 | 2026-10-01 17:44 | Martin Surkovsky | The tool contract section now exists |
 | 2026-10-01 17:41 | Martin Surkovsky | Point to the case file by its skill name, as `gk check` requires |
 | 2026-10-01 06:12 | Martin Surkovsky | Require a `wait` timeout below the host limit, after the wake spike |

@@ -130,7 +130,7 @@ flowchart TB
 
   human -- "selects, comments, submits" --> page
   page -- "loads rendering, posts comments<br/>HTTP + token" --> serve
-  agent -- "starts in background" --> serve
+  agent -- "starts detached" --> serve
   agent -- "runs" --> cli
   cli -- "wait, reply, next<br/>HTTP + token" --> serve
   serve -- "appends events, writes versions" --> store
@@ -247,15 +247,22 @@ sequenceDiagram
   participant B as Browser
 
   H->>A: "review docs/foo.md with me"
-  A->>S: gk md-review serve docs/foo.md (background task)
+  A->>S: gk md-review serve docs/foo.md --detach
   S->>FS: lock .md-review/reviews/<key>/, check log format
   S->>FS: snapshot v1, write server.json (with gk version)
-  S-->>A: URL with token (stdout, first line)
+  S-->>A: URL with token (stdout, first line); the caller returns
   A->>H: prints the URL
   A->>S: gk md-review wait (background task, blocks)
   H->>B: opens URL
   B->>S: GET / → rendered v1
 ```
+
+`serve --detach` runs the server as a process of its own, in its own
+process group, and returns once it has printed the URL. Claude Code stops
+a background task after at most two hours, and the server must run for
+the whole review, so it is not a host task; only `wait` is, and it ends
+itself before the limit. The server outlives the agent session: a later
+session continues the review, and `stop` or a delivered approval ends it.
 
 `serve` on a file that already has a live server does not start a second one:
 it cannot take the store lock, so it prints the existing URL and exits 0. A
@@ -585,7 +592,7 @@ unless a submitted round waits for them, and after approval.
 
 | Command | Does | Exit |
 |---|---|---|
-| `gk md-review serve <file>` | starts or reuses the server, prints the URL | runs until approval is delivered, or stop; 0 when reusing a live server; 1 on bind failure, unknown log format, file over 1 MiB or not UTF-8 |
+| `gk md-review serve <file> [--detach]` | starts or reuses the server, prints the URL; with `--detach` the server runs on its own and the command returns | runs until approval is delivered, or stop; with `--detach`, 0 once the URL is printed, else the server's exit code and message; 0 when reusing a live server; 1 on bind failure, unknown log format, file over 1 MiB or not UTF-8 |
 | `gk md-review wait [<file>] --timeout <dur>` | returns a pending submit or approval, or blocks until one or the timeout | 0 on event or timeout; 1 on no server or version mismatch |
 | `gk md-review reply [<file>] <thread> --outcome … --note …` | records the agent's answer to a thread | 0 / 1; 1 unless a submitted round waits, and after approval, naming it |
 | `gk md-review next [<file>]` | closes the round, snapshots the next version | 0 / 1; 1 unless a submitted round waits, after approval naming it, and on a file over 1 MiB or not UTF-8 |
@@ -634,6 +641,9 @@ section covers them.
   lost. Verified on 2026-10-01 with a spike: a click woke the agent; a task
   that hit the limit was killed with the no-restart note; one that timed
   out first completed cleanly; a submit after 31 min woke the agent.
+- **Naming.** `gist-md-review`, next to `gist-doc-review`, which reviews
+  code comments. The skill's description tells them apart: the user
+  reviews a markdown file themselves, not the agent reviewing code.
 - **Answerer model.** Same model and effort as the review started with.
   `claude -p --resume <sid> --fork-session --model <m>` honours the model
   (verified on 2.1.283).
@@ -685,5 +695,3 @@ reduced to what the others do not cover.
 1. **Session id** for the Explain fork: how the agent or `gk` learns it.
    A hook sees it; the agent may not.
 2. **Store location** outside a git repository.
-3. **Naming.** `gist-md-review` next to `gist-doc-review`, which reviews
-   code comments. Confirm the names do not confuse the trigger phrasing.

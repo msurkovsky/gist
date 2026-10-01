@@ -26,6 +26,7 @@ flowchart LR
 | `gist-cli/src/doc/` | Classify added comment lines with their full-file context; report a triage metric | [0001](adr/0001-diff-with-libgit2.md), `gist-doc-review` |
 | `gist-cli/src/outline.rs` | Count files and bytes by extension, respecting ignore rules by default | [Outline cases](cases/gist-outline.md) |
 | `gist-cli/src/check.rs` | Validate repository structure and vendor content, without installing anything | [Check cases](cases/repository-checks.md), [0012](adr/0012-validate-repository-content.md) |
+| `gist-cli/src/md_review/` | Serve a markdown review page on 127.0.0.1; keep the review in an append-only log; the agent's `wait`, `reply`, `next`, `status` and `stop` clients | [HLD](design/md-review-hld.md), ADRs [0013](adr/0013-wake-the-agent-with-a-background-wait.md)–[0015](adr/0015-md-review-http-stack.md), [cases](cases/gist-md-review.md) |
 | `gist-cli/src/hook.rs` | Validate commit messages and explicitly install Git hook shims | [0009](adr/0009-install-git-hooks-with-gk.md) |
 | `gist-core` | Human rendering, JSON envelope, exit codes | [Tool contract](tool-contract.md) |
 | `scripts/vendor.sh`, `views/` | Import upstream history; optionally project selected paths with Josh | [0004](adr/0004-compose-via-josh.md) |

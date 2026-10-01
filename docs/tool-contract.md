@@ -40,9 +40,12 @@ says look before continuing.
 
 ## Long-running subcommands
 
-Some subcommands run as a host's background task instead of returning at
-once: `gk md-review serve` for a whole review, `gk md-review wait` until
-something happens (`docs/adr/0013`). The rules above still hold. In
+Some subcommands keep running instead of returning at once: `gk md-review
+serve` for a whole review, `gk md-review wait` until something happens
+(`docs/adr/0013`). A host stops its background tasks at a limit, so only a
+command that ends itself before it, like `wait`, runs as one. A command that
+must outlive the limit detaches: `serve --detach` starts the server as a
+process of its own, prints the result line and returns. The rules above still hold. In
 addition:
 
 - **One result on stdout.** A command that keeps running after it is ready
