@@ -104,7 +104,7 @@ result; a timeout is an outcome and exits 0; no progress output.
 The loop depends on a Claude Code behaviour, not a protocol. If Claude Code
 stops waking the agent on background task exit, or lowers its background
 limit below the `wait` timeout, the loop breaks; the host case under
-`docs/cases/md-review.md` checks it.
+`docs/cases/gist-md-review.md` checks it.
 
 An idle review costs one short agent turn per timeout, about one every
 two hours.
@@ -148,6 +148,7 @@ with a test flag instead of sleeping.
 
 | When | Who | Why |
 |---|---|---|
+| 2026-10-01 17:41 | Martin Surkovsky | Point to the case file by its skill name, as `gk check` requires |
 | 2026-10-01 06:12 | Martin Surkovsky | Require a `wait` timeout below the host limit, after the wake spike |
 | 2026-09-30 22:05 | Martin Surkovsky | Apply the CEO review: durable, at-least-once delivery; version check |
 | 2026-09-26 23:40 | Martin Surkovsky | Link the design by its new HLD name |
