@@ -117,8 +117,11 @@ Building the anchor is a pure function in `anchor.js`, unit tested with
 - **Blocks and source lines.** The renderer tags each block element with
   its index and source line range (`data-block="12" data-lines="12-18"`). A
   selection maps to the blocks it touches and the union of their ranges.
+  Blocks are the document's top-level elements: a list, table or block
+  quote is one block.
 - **Non-text blocks.** A mermaid diagram, image or table can be selected
-  only as a whole block; its quote is the block's source text.
+  only as a whole block; its quote is the block's rendered text, so it
+  re-anchors like any other quote.
 
 ### Re-anchoring after a round
 
