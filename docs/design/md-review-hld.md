@@ -547,8 +547,8 @@ Clients take the reviewed file. Without it, they use the one live review,
 or exit 1 listing the live ones when there are several. The skill always
 passes it, so a review started from another session never reaches this
 session's `wait`.
-`serve` and `wait` block, which the contract does not cover today; they need
-a section there before implementation (see open questions).
+`serve` and `wait` block; the contract's "Long-running subcommands"
+section covers them.
 
 ## Security
 
@@ -628,12 +628,8 @@ reduced to what the others do not cover.
 
 ## Open questions
 
-1. **Tool contract.** `serve` runs for the whole review and `wait` blocks.
-   Add a "long-running subcommands" section: stdout carries only the first
-   result line (`serve`) or the final result (`wait`); a timeout is an
-   outcome, not an error (`wait` requires one); no progress output.
-2. **Session id** for the Explain fork: how the agent or `gk` learns it.
+1. **Session id** for the Explain fork: how the agent or `gk` learns it.
    A hook sees it; the agent may not.
-3. **Store location** outside a git repository.
-4. **Naming.** `gist-md-review` next to `gist-doc-review`, which reviews
+2. **Store location** outside a git repository.
+3. **Naming.** `gist-md-review` next to `gist-doc-review`, which reviews
    code comments. Confirm the names do not confuse the trigger phrasing.

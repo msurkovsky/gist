@@ -46,8 +46,9 @@ deployment, so no full eng review; the steps below replace it, in order:
 2. ~~Answer the open questions.~~ Done 2026-10-01: `axum`, long-poll
    and embedded mermaid (ADR 0015); 1 MiB cap; quote unique in the old
    version too; optional `<file>` on clients; a reply reopens a thread.
-3. Write the long-running subcommands section of `docs/tool-contract.md`
-   and the behavior cases in `docs/cases/gist-md-review.md`, for approval.
+3. ~~Write the tool contract section and the behavior cases.~~ Done
+   2026-10-01: `docs/tool-contract.md` "Long-running subcommands" and
+   `docs/cases/gist-md-review.md`, both approved.
 4. Implement, starting with the store, log and lock (ADR 0014).
 
 Slice 2, deferred by the review: vim key bindings; word-level track changes

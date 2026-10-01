@@ -38,6 +38,34 @@ says look before continuing.
   git shows a hook's output to the committer on every commit (`docs/adr/0009`).
 - Deterministic ordering. Sort explicitly — hash iteration order is not an order.
 
+## Long-running subcommands
+
+Some subcommands run as a host's background task instead of returning at
+once: `gk md-review serve` for a whole review, `gk md-review wait` until
+something happens (`docs/adr/0013`). The rules above still hold. In
+addition:
+
+- **One result on stdout.** A command that keeps running after it is ready
+  (`serve`) prints its result as the first line, then nothing until it
+  exits. A command that blocks for an event (`wait`) prints only its final
+  result, on exit. No heartbeats, no progress, in either rendering.
+- **A timeout is an outcome.** A blocking command takes `--timeout`, and it
+  is required when the caller runs under a host limit. When it expires the
+  command prints a timeout result in both renderings and exits `0`. The
+  host kills a task that reaches its own limit and tells the agent not to
+  restart it, so the command must end first; the caller then decides
+  whether to run it again.
+- **Restarting loses nothing.** State lives outside the process. A command
+  killed, timed out or never started is safe to run again: a later `wait`
+  returns what an earlier one missed, marked as a repeat when it was
+  already delivered.
+- **No second instance.** Starting a long-running command that is already
+  running for the same target prints the running one's result and exits
+  `0`; it does not start another.
+- **Prompt exit on a signal.** On SIGINT or SIGTERM the command stops
+  promptly and leaves its state consistent; locks are OS locks, released
+  with the process.
+
 ## Adding a subcommand
 
 Follow the approved-prose workflow in `CONTRIBUTING.md`. Add behavior cases under
