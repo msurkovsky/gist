@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>gk md-review</title>
+<link rel="icon" href="/assets/favicon.svg">
+<link rel="stylesheet" href="/assets/page.css">
+<script type="module" src="/assets/page.js"></script>
+</head>
+<body>
+<header id="top" class="top">
+  <div class="toolbar">
+    <span class="title"><span id="file">gk md-review</span> <span id="where" class="muted"></span></span>
+    <span id="connection" class="connection" role="status"></span>
+    <span class="actions">
+      <label class="toggle"><input type="checkbox" id="show-changes" checked> Show changes</label>
+      <button type="button" id="drawer-toggle" class="drawer-toggle">Comments</button>
+      <button type="button" id="submit" disabled>Submit review</button>
+      <button type="button" id="approve" class="primary" disabled>Approve</button>
+    </span>
+    <div id="resume" class="resume" hidden></div>
+  </div>
+  <div id="banner" class="banner" role="alert" hidden></div>
+</header>
+<main class="review">
+  <article id="document" class="document"><p class="placeholder">Loading the review…</p></article>
+  <aside id="margin" class="margin" aria-label="Comments"></aside>
+</main>
+
+<dialog id="submit-dialog">
+  <form method="dialog">
+    <h2>Submit review</h2>
+    <label for="summary">Overall comment, optional</label>
+    <textarea id="summary" rows="4"></textarea>
+    <div id="submit-pending"></div>
+    <p class="error" id="submit-error" hidden></p>
+    <div class="buttons">
+      <button type="button" value="cancel" data-close>Cancel</button>
+      <button type="button" id="submit-confirm" class="primary">Submit</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="approve-dialog">
+  <form method="dialog">
+    <h2>Approve</h2>
+    <p id="approve-covers"></p>
+    <div id="approve-pending"></div>
+    <label for="note">Note, optional</label>
+    <textarea id="note" rows="3"></textarea>
+    <p class="error" id="approve-error" hidden></p>
+    <div class="buttons">
+      <button type="button" value="cancel" data-close>Cancel</button>
+      <button type="button" id="approve-back" hidden>Back to submit them</button>
+      <button type="button" id="approve-confirm" class="primary">Approve</button>
+    </div>
+  </form>
+</dialog>
+</body>
+</html>

@@ -39,12 +39,51 @@ const GRACE_SECS: u64 = 90;
 const BODY_LIMIT: usize = 256 * 1024;
 const MAX_ID_CHARS: usize = 64;
 
-/// Placeholder until the review page is built; served with the page's
-/// headers so they are in place and tested from the start.
-const PAGE: &str = "<!doctype html>\n<meta charset=\"utf-8\">\n<title>gk md-review</title>\n<p>The review page is not built yet.</p>\n";
+const PAGE: &str = include_str!("assets/page.html");
 /// The page loads only what `serve` serves and sends nothing elsewhere.
-const PAGE_CSP: &str = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; \
-                        connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
+/// Inline styles are allowed because mermaid writes its diagrams' styles
+/// inline; with every fetch and image confined to `serve`, a style cannot
+/// carry anything out.
+const PAGE_CSP: &str = "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; \
+                        img-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; \
+                        frame-ancestors 'none'";
+
+/// The page's scripts, styles and icon, the same in every `gk` of a
+/// version. They hold nothing secret, so they are served without the
+/// token: a module script's imports and the icon are fetched by the
+/// browser, which cannot add it.
+const ASSETS: &[(&str, &str, &[u8])] = &[
+    (
+        "page.css",
+        "text/css; charset=utf-8",
+        include_bytes!("assets/page.css"),
+    ),
+    (
+        "page.js",
+        "text/javascript; charset=utf-8",
+        include_bytes!("assets/page.js"),
+    ),
+    (
+        "anchor.js",
+        "text/javascript; charset=utf-8",
+        include_bytes!("assets/anchor.js"),
+    ),
+    (
+        "margin.js",
+        "text/javascript; charset=utf-8",
+        include_bytes!("assets/margin.js"),
+    ),
+    (
+        "mermaid.min.js",
+        "text/javascript; charset=utf-8",
+        include_bytes!("assets/mermaid.min.js"),
+    ),
+    (
+        "favicon.svg",
+        "image/svg+xml",
+        include_bytes!("assets/favicon.svg"),
+    ),
+];
 
 /// Start serving `file`, or report the live server that already does.
 /// `announce` prints the result line; after it, `serve` prints nothing
@@ -66,17 +105,23 @@ pub fn run(file: &Path, announce: impl FnOnce(&Served)) -> Result<(), String> {
         }
     };
 
-    let old_port = location.read_server().ok().flatten().map(|info| info.port);
-    let listener = bind(old_port)?;
+    // A resumed review keeps its port when free and its token, so a page
+    // left open reconnects.
+    let old = location.read_server().ok().flatten();
+    let listener = bind(old.as_ref().map(|info| info.port))?;
     let port = listener
         .local_addr()
         .map_err(|err| format!("could not read the bound port: {err}"))?
         .port();
+    let token = match old {
+        Some(info) if is_token(&info.token) => info.token,
+        _ => token()?,
+    };
     let info = ServerInfo {
         file: location.file().to_string(),
         pid: std::process::id(),
         port,
-        token: token()?,
+        token,
         version: env!("CARGO_PKG_VERSION").to_string(),
     };
     // Everything that can fail happens before the URL is printed: a caller
@@ -130,6 +175,12 @@ fn token() -> Result<String, String> {
     let mut bytes = [0u8; 32];
     getrandom::fill(&mut bytes).map_err(|err| format!("could not make a token: {err}"))?;
     Ok(bytes.iter().map(|b| format!("{b:02x}")).collect())
+}
+
+/// Whether `text` is a token as `token` makes them, so a hand-edited
+/// `server.json` cannot weaken it.
+fn is_token(text: &str) -> bool {
+    text.len() == 64 && text.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
 }
 
 /// Ends the server on SIGINT, SIGTERM, `stop` or a delivered approval, and
@@ -199,7 +250,9 @@ impl Server {
             info: info.clone(),
             state: Mutex::new(Live {
                 store,
-                seq: 0,
+                // A restarted server must not repeat a value an open page
+                // holds, or that page's poll would wait out its hold.
+                seq: now_millis(),
                 rendered: Vec::new(),
                 current,
                 waiters: 0,
@@ -224,13 +277,15 @@ impl Server {
         self.finished.notify_one();
     }
 
-    /// After the last request: delete a delivered approval's store, or
-    /// remove `server.json` so clients find no server.
+    /// After the last request: delete a delivered approval's store. A
+    /// stopped review keeps `server.json`, so the next `serve` takes its
+    /// port and token and an open page reconnects; clients probe it and
+    /// find no server meanwhile.
     fn finish(&self) -> Result<(), String> {
         let state = self.lock();
         match state.finish {
             Some(Finish::Approved) => state.store.remove(),
-            _ => state.store.clear_server(),
+            _ => Ok(()),
         }
     }
 }
@@ -238,6 +293,7 @@ impl Server {
 fn router(shared: Arc<Server>) -> Router {
     Router::new()
         .route("/", get(page))
+        .route("/assets/{name}", get(asset))
         .route("/api/review", get(review))
         .route("/api/threads", post(post_message))
         .route("/api/threads/{id}/resolve", post(resolve))
@@ -267,6 +323,9 @@ async fn guard(Shared_(shared): Shared_<Arc<Server>>, request: Request, next: Ne
         .and_then(|value| value.to_str().ok());
     if host != Some(shared.host.as_str()) {
         return ApiError::new(StatusCode::FORBIDDEN, "wrong Host").into_response();
+    }
+    if request.method() == axum::http::Method::GET && request.uri().path().starts_with("/assets/") {
+        return next.run(request).await;
     }
     let token = bearer(request.headers()).or_else(|| {
         request.uri().query().and_then(|query| {
@@ -362,6 +421,21 @@ async fn page() -> Response {
         HeaderValue::from_static("nosniff"),
     );
     headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    response
+}
+
+async fn asset(UrlPath(name): UrlPath<String>) -> Response {
+    let Some((_, content_type, bytes)) = ASSETS.iter().find(|(known, _, _)| *known == name) else {
+        return ApiError::new(StatusCode::NOT_FOUND, format!("no asset {name}")).into_response();
+    };
+    let mut response = bytes.into_response();
+    let headers = response.headers_mut();
+    headers.insert(header::CONTENT_TYPE, HeaderValue::from_static(content_type));
+    headers.insert(
+        header::X_CONTENT_TYPE_OPTIONS,
+        HeaderValue::from_static("nosniff"),
+    );
+    headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-cache"));
     response
 }
 
@@ -1305,6 +1379,12 @@ fn non_blank(text: &str, what: &str) -> Result<String, ApiError> {
     Ok(trimmed.to_string())
 }
 
+fn now_millis() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |elapsed| elapsed.as_millis() as u64)
+}
+
 fn now() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -1490,6 +1570,122 @@ mod tests {
         assert!(csp.contains("connect-src 'self'"), "{csp}");
         assert!(!csp.contains("http"), "{csp}");
         assert_eq!(headers[header::REFERRER_POLICY], "no-referrer");
+    }
+
+    /// A GET without the token, as a browser fetches a script: status,
+    /// content type and whether it is marked nosniff.
+    fn fetch(fixture: &Fixture, method: &str, uri: &str, host: &str) -> (StatusCode, String, bool) {
+        let request = Request::builder()
+            .method(method)
+            .uri(uri)
+            .header(header::HOST, host)
+            .body(Body::empty())
+            .unwrap();
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let response = runtime
+            .block_on(router(fixture.shared.clone()).oneshot(request))
+            .unwrap();
+        let headers = response.headers();
+        let kind = headers
+            .get(header::CONTENT_TYPE)
+            .map_or(String::new(), |v| v.to_str().unwrap().to_string());
+        (
+            response.status(),
+            kind,
+            headers.get(header::X_CONTENT_TYPE_OPTIONS).is_some(),
+        )
+    }
+
+    #[test]
+    fn the_page_assets_are_served_without_the_token_but_only_to_its_host() {
+        let fixture = fixture();
+        for (name, kind) in [
+            ("page.js", "text/javascript"),
+            ("anchor.js", "text/javascript"),
+            ("margin.js", "text/javascript"),
+            ("mermaid.min.js", "text/javascript"),
+            ("page.css", "text/css"),
+            ("favicon.svg", "image/svg+xml"),
+        ] {
+            let (status, content_type, nosniff) =
+                fetch(&fixture, "GET", &format!("/assets/{name}"), HOST);
+            assert_eq!(status, StatusCode::OK, "{name}");
+            assert!(content_type.starts_with(kind), "{name}: {content_type}");
+            assert!(nosniff, "{name}");
+        }
+        for missing in ["/assets/none.js", "/assets/..%2Fpage.html", "/assets/"] {
+            let (status, _, _) = fetch(&fixture, "GET", missing, HOST);
+            assert!(
+                status == StatusCode::NOT_FOUND || status == StatusCode::UNAUTHORIZED,
+                "{missing}: {status}"
+            );
+        }
+        let (status, _, _) = fetch(&fixture, "GET", "/assets/page.js", "evil.example:4000");
+        assert_eq!(status, StatusCode::FORBIDDEN);
+        // Only reading an asset goes without the token.
+        let (status, _, _) = fetch(&fixture, "POST", "/assets/page.js", HOST);
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+        let (status, _, _) = fetch(&fixture, "GET", "/api/status?limit=0", HOST);
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+        let (status, _, _) = fetch(&fixture, "GET", "/assets/../api/status?limit=0", HOST);
+        assert_ne!(status, StatusCode::OK);
+    }
+
+    /// Every `prefix…"` reference in `text`.
+    fn references<'a>(text: &'a str, prefix: &str) -> Vec<&'a str> {
+        text.split(prefix)
+            .skip(1)
+            .map(|rest| &rest[..rest.find('"').unwrap()])
+            .collect()
+    }
+
+    #[test]
+    fn the_page_loads_only_assets_that_are_served() {
+        let served: Vec<&str> = ASSETS.iter().map(|(name, _, _)| *name).collect();
+        let page_js =
+            std::str::from_utf8(ASSETS.iter().find(|a| a.0 == "page.js").unwrap().2).unwrap();
+        let mut loaded = Vec::new();
+        for prefix in ["src=\"", "href=\""] {
+            loaded.extend(references(PAGE, prefix));
+        }
+        loaded.extend(references(page_js, "src: \""));
+        assert!(loaded.len() >= 3, "{loaded:?}");
+        for path in &loaded {
+            let name = path
+                .strip_prefix("/assets/")
+                .unwrap_or_else(|| panic!("{path} is not an asset"));
+            assert!(served.contains(&name), "{name} is not served");
+        }
+        for import in references(page_js, "from \"./") {
+            assert!(served.contains(&import), "{import} is not served");
+        }
+    }
+
+    // ADR 0015: the embedded mermaid is the pinned, checksummed one.
+    #[test]
+    fn the_embedded_mermaid_is_the_one_whose_checksum_is_recorded() {
+        let recorded = include_str!("assets/mermaid.min.js.sha256");
+        let (sum, name) = recorded.trim().split_once("  ").unwrap();
+        let (_, _, bytes) = ASSETS.iter().find(|a| a.0 == name).unwrap();
+        assert_eq!(hash(bytes), sum);
+    }
+
+    #[test]
+    fn only_a_token_shaped_like_a_made_one_is_kept() {
+        assert!(is_token(&token().unwrap()));
+        assert!(is_token(&"0a".repeat(32)));
+        for bad in [
+            "",
+            "secret",
+            &"0A".repeat(32),
+            &"0a".repeat(31),
+            &"0g".repeat(32),
+        ] {
+            assert!(!is_token(bad), "{bad}");
+        }
     }
 
     // Case: docs/cases/gist-md-review.md#stale-write

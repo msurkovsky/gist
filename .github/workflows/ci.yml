@@ -27,5 +27,9 @@ jobs:
       - run: cargo fmt --check
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo test
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node --test crates/gist-cli/src/md_review/assets/*.test.js
       - run: scripts/check.sh
         working-directory: .
