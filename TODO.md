@@ -43,16 +43,15 @@ deployment, so no full eng review; the steps below replace it, in order:
 1. ~~Validate the wake.~~ Done 2026-10-01 with a spike: a submit after
    31 minutes woke the agent. The host kills a task at its limit and says
    not to restart it, so `wait` now times out first (ADR 0013, HLD Settled).
-2. Answer the open questions: HLD open questions 3 (HTTP stack and mermaid
-   size, an ADR) and 7–9 (size cap, a copied phrase in re-anchoring, which
-   review a client means with two live); reopening a thread has no log
-   event (DLD cards).
+2. ~~Answer the open questions.~~ Done 2026-10-01: `tiny_http`, long-poll
+   and embedded mermaid (ADR 0015); 1 MiB cap; quote unique in the old
+   version too; optional `<file>` on clients; a reply reopens a thread.
 3. Write the long-running subcommands section of `docs/tool-contract.md`
    and the behavior cases in `docs/cases/md-review.md`, for approval.
 4. Implement, starting with the store, log and lock (ADR 0014).
 
 Slice 2, deferred by the review: vim key bindings; word-level track changes
-(slice 1 marks changed blocks).
+(slice 1 marks changed blocks); export and import of a review.
 
 ## Later: distribution and platform support
 
