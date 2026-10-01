@@ -37,8 +37,9 @@ or behavioral evaluation.
 |---|---|
 | `gist-outline` | the shape of a codebase — file counts, dominant languages, where the weight sits. Orienting in an unfamiliar repo |
 | `gist-doc-review` | the comments and doc strings in a change — cut what restates the code, shorten the bloated, add the missing line on public API |
+| `gist-md-review` | a markdown file you review yourself in a browser page, commenting on selections, while the agent revises it round by round until you approve. Claude Code only |
 
-Both support implicit selection. Invoke explicitly with `/gist-outline` or
+All support implicit selection. Invoke explicitly with `/gist-outline` or
 `/gist-doc-review` in Claude Code, and `$gist-outline` or `$gist-doc-review` in
 Codex. Host evaluation status and acceptance scenarios live in `docs/cases/`.
 
