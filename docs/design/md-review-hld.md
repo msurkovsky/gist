@@ -149,7 +149,7 @@ flowchart TB
   cli["<b>wait / reply / next</b><br/>[Container]"]:::ext
 
   subgraph serve["gk md-review serve [Container]"]
-    http["<b>HTTP API</b><br/>[localhost, token + Host check]<br/>Routes page and CLI requests,<br/>rejects writes to a stale round"]:::container
+    http["<b>HTTP API</b><br/>[tiny_http, localhost, token + Host check]<br/>Routes page and CLI requests,<br/>rejects writes to a stale round"]:::container
     render["<b>Renderer</b><br/>[comrak with sourcepos]<br/>Markdown to HTML and per-block plain text,<br/>mermaid passed to the page"]:::container
     diff["<b>Differ</b><br/>[block-level]<br/>Marks changed, added and deleted blocks"]:::container
     anchor["<b>Re-anchorer</b><br/>[on rendered plain text]<br/>Moves open threads to the new version"]:::container
@@ -285,7 +285,7 @@ sequenceDiagram
   A->>S: gk md-review next
   S->>S: snapshot vN+1 with hash, re-anchor open threads, append round_started
   A->>S: gk md-review wait (background task)
-  B->>S: poll sees round N+1
+  B->>S: long-poll sees round N+1
   B->>S: GET / → vN+1 with changed blocks marked, replies shown per thread
 ```
 
@@ -432,7 +432,8 @@ One JSON object per line. Current state is a fold over the log.
 A log whose `format` this `gk` does not know is refused and left untouched.
 Edits and deletes after submit get 409, like any stale write. Whether a
 thread is orphaned is not an event: it is derived on fold, by re-anchoring
-against the current version.
+against the current version. Nor is reopening: a reviewer message after a
+thread's resolution or its `applied` outcome reopens it on fold.
 
 ### Anchor
 
@@ -459,8 +460,8 @@ the source. The renderer emits each block's plain text with its source
 lines; the page sends the quote and the blocks it touches; the server
 matches the quote in the next version's plain text under a whitespace
 normalisation rule. A quote found without its context is re-attached only
-when it occurs once in the new version under the same heading path;
-anything else is orphaned rather than guessed. Steps in the
+when it occurs once under the same heading path in both the old and the
+new version; anything else is orphaned rather than guessed. Steps in the
 [page DLD](md-review-dld-page.md#re-anchoring-after-a-round).
 
 ### What `wait` returns
@@ -534,14 +535,18 @@ Two additions, both omitted when they do not apply:
 
 | Command | Does | Exit |
 |---|---|---|
-| `gk md-review serve <file> [--model --effort --session]` | starts or reuses the server, prints the URL | runs until approval is delivered, or stop; 0 when reusing a live server; 1 on bind failure, unknown log format |
-| `gk md-review wait --timeout <dur>` | returns a pending submit or approval, or blocks until one or the timeout | 0 on event or timeout; 1 on no server or version mismatch |
-| `gk md-review reply <thread> --outcome … --note …` | records the agent's answer to a thread | 0 / 1; 1 after approval, naming it |
-| `gk md-review next` | closes the round, snapshots the next version | 0 / 1; 1 after approval, naming it |
-| `gk md-review status [--round N]` | current round, open threads, waiters, undelivered submit | 0 / 1 |
-| `gk md-review stop` | stops the server, keeps the store | 0 / 1 |
+| `gk md-review serve <file> [--model --effort --session]` | starts or reuses the server, prints the URL | runs until approval is delivered, or stop; 0 when reusing a live server; 1 on bind failure, unknown log format, file over 1 MiB |
+| `gk md-review wait [<file>] --timeout <dur>` | returns a pending submit or approval, or blocks until one or the timeout | 0 on event or timeout; 1 on no server or version mismatch |
+| `gk md-review reply [<file>] <thread> --outcome … --note …` | records the agent's answer to a thread | 0 / 1; 1 after approval, naming it |
+| `gk md-review next [<file>]` | closes the round, snapshots the next version | 0 / 1; 1 after approval, naming it |
+| `gk md-review status [<file>] [--round N]` | current round, open threads, waiters, undelivered submit | 0 / 1 |
+| `gk md-review stop [<file>]` | stops the server, keeps the store | 0 / 1 |
 
 All take `--json` and follow the envelope in `docs/tool-contract.md`.
+Clients take the reviewed file. Without it, they use the one live review,
+or exit 1 listing the live ones when there are several. The skill always
+passes it, so a review started from another session never reaches this
+session's `wait`.
 `serve` and `wait` block, which the contract does not cover today; they need
 a section there before implementation (see open questions).
 
@@ -557,7 +562,10 @@ a section there before implementation (see open questions).
   links stripped, mermaid in strict security mode, no external requests
   from the page.
 - The bundled `mermaid.min.js` is pinned to a version, with its checksum
-  recorded in the repository.
+  recorded in the repository, and compiled into `gk`
+  ([ADR 0015](../adr/0015-md-review-http-stack.md)).
+- `serve` refuses a file over 1 MiB with exit 1, naming the limit, so
+  rendering, diffing and `wait` output stay bounded.
 - Store deletion reuses the confined-path and symlink refusal of ADRs 0008
   and 0010; a store that cannot be deleted safely is kept.
 
@@ -588,7 +596,7 @@ docs/
   adr/
     0013-wake-the-agent-with-a-background-wait.md  # background wait over MCP
     0014-review-state-in-an-append-only-log.md     # event log, one writer, store
-    00NN-md-review-http-stack.md   # server crate, mermaid embedding, polling vs SSE
+    0015-md-review-http-stack.md   # tiny_http, mermaid embedded, long-poll
   tool-contract.md                 # new section: long-running subcommands
   architecture.md                  # one new row once md_review/ exists
 skills/
@@ -626,20 +634,6 @@ reduced to what the others do not cover.
    outcome, not an error (`wait` requires one); no progress output.
 2. **Session id** for the Explain fork: how the agent or `gk` learns it.
    A hook sees it; the agent may not.
-3. **HTTP stack.** A small synchronous server (e.g. `tiny_http`) fits a CLI
-   without an async runtime. Mermaid adds about 3 MB to the binary. ADR.
-4. **Page updates.** Polling first; SSE if polling feels slow.
-5. **Store location** outside a git repository.
-6. **Naming.** `gist-md-review` next to `gist-doc-review`, which reviews
+3. **Store location** outside a git repository.
+4. **Naming.** `gist-md-review` next to `gist-doc-review`, which reviews
    code comments. Confirm the names do not confuse the trigger phrasing.
-7. **Size cap.** The tool contract forbids unbounded output, and a
-   multi-megabyte file makes render, diff and `wait` slow. Proposed:
-   `serve` refuses a file over a stated limit with exit 1. Limit to be set.
-8. **Re-anchoring on a copied phrase.** A quote that occurred twice in the
-   old version (original and copy) and once in the new one (original
-   deleted) passes "unique in the new version" and attaches to the copy.
-   Requiring uniqueness in the old version too would close it.
-9. **Which review a client means.** `wait`, `reply`, `next` and `status`
-   take no file. With two reviews live they cannot tell which one is meant.
-   Either they take `<file>`, or they exit 1 when more than one review is
-   live and name the choices.
