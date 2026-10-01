@@ -34,6 +34,10 @@ Slice 2, designed but deferred:
 - **Vim key bindings** on the page, once a mockup shows `Selection.modify`
   behaves across browsers.
 - **Word-level track changes** inside a changed block.
+- **Export and import.** The page downloads the review (document, threads,
+  unsent drafts) as a file; importing it resumes the review, through
+  `serve`, so `serve` stays the only writer. Covers a dead machine or
+  another browser; slice 1 covers a closed tab with the draft backup.
 
 Parked, designed for but not built:
 
@@ -208,10 +212,13 @@ docs/foo.md · round 2 · 3 pending   [Show changes ✓]  [Submit review]  [Appr
   is about to change.
 - **Show changes** marks the blocks changed since the previous version;
   deleted blocks show as struck stubs.
-- **Banners** say when no agent is listening, when the server is
-  unreachable, when the working file differs from the version on screen,
-  and when a write was refused because the page is stale (reload; drafts
-  are kept).
+- **Connection indicator**, always visible: agent listening, agent away
+  (with the command that resumes the review in Claude Code), or server
+  offline. The page reconnects to `serve` by itself and keeps unsent drafts
+  in browser storage until `serve` accepts them.
+- **Banners** say when the working file differs from the version on
+  screen, and when a write was refused because the page is stale (reload;
+  drafts are kept).
 
 ## Flows
 
@@ -240,7 +247,8 @@ sequenceDiagram
 `serve` on a file that already has a live server does not start a second one:
 it cannot take the store lock, so it prints the existing URL and exits 0. A
 stale `server.json` whose process is gone is replaced, and the review
-resumes from the log.
+resumes from the log, on the old port when it is free, so a tab left open
+reconnects.
 
 `serve` exits 1 and writes nothing when the store's log has a format this
 `gk` does not know. A client whose `gk` version differs from the one in
@@ -295,8 +303,9 @@ version so the round count stays honest.
   A delivery after the first is marked with the first delivery time and
   the threads already replied to; the skill re-reads the file and skips
   them. Delivery is at least once, never silently dropped.
-- **Presence.** The page shows "no agent listening" when a submit is
-  pending and no `wait` is connected; `status` shows waiters and an
+- **Presence.** The page shows the agent as away when no `wait` has polled
+  for 90 s. The grace period covers the restart after a `wait` timeout, so
+  the routine restart never shows. `status` shows waiters and an
   undelivered submit.
 - **File drift.** Each version is hashed. When the working file differs
   from the version the reviewer read by the time the review is delivered,
@@ -509,6 +518,9 @@ Or `{"event": "approved", "round": N, "version": N, "note": "…", "record":
 threads than `--limit` reports `truncated`, and the agent pages with
 `gk md-review status --round N`.
 
+`{"event": "timeout", "after": "110m"}` when `--timeout` expires with
+nothing pending; the skill starts `wait` again.
+
 Two additions, both omitted when they do not apply:
 
 - `redelivered`: the first delivery time and the threads already replied
@@ -523,7 +535,7 @@ Two additions, both omitted when they do not apply:
 | Command | Does | Exit |
 |---|---|---|
 | `gk md-review serve <file> [--model --effort --session]` | starts or reuses the server, prints the URL | runs until approval is delivered, or stop; 0 when reusing a live server; 1 on bind failure, unknown log format |
-| `gk md-review wait [--timeout]` | returns a pending submit or approval, or blocks until one; no timeout by default | 0 on event, 1 on timeout, no server or version mismatch |
+| `gk md-review wait --timeout <dur>` | returns a pending submit or approval, or blocks until one or the timeout | 0 on event or timeout; 1 on no server or version mismatch |
 | `gk md-review reply <thread> --outcome … --note …` | records the agent's answer to a thread | 0 / 1; 1 after approval, naming it |
 | `gk md-review next` | closes the round, snapshots the next version | 0 / 1; 1 after approval, naming it |
 | `gk md-review status [--round N]` | current round, open threads, waiters, undelivered submit | 0 / 1 |
@@ -551,9 +563,15 @@ a section there before implementation (see open questions).
 
 ## Settled
 
-- **`wait` has no default timeout.** A review takes as long as the reviewer
-  needs; the background task waits until submit or approve. Confirm in the
-  first host run that Claude Code does not cut a long background task.
+- **`wait` times out before the host does.** Claude Code stops a
+  background task at its timeout (at most 2 h), reports it as killed and
+  tells the agent not to restart it. So `wait` takes `--timeout` below that
+  limit (110 min under 120), exits 0 with a `timeout` event, and the skill
+  starts it again: one short agent turn per idle timeout. A review takes as
+  long as the reviewer needs; a submit during the restart is pending, not
+  lost. Verified on 2026-10-01 with a spike: a click woke the agent; a task
+  that hit the limit was killed with the no-restart note; one that timed
+  out first completed cleanly; a submit after 31 min woke the agent.
 - **Answerer model.** Same model and effort as the review started with.
   `claude -p --resume <sid> --fork-session --model <m>` honours the model
   (verified on 2.1.283).
@@ -604,8 +622,8 @@ reduced to what the others do not cover.
 
 1. **Tool contract.** `serve` runs for the whole review and `wait` blocks.
    Add a "long-running subcommands" section: stdout carries only the first
-   result line (`serve`) or the final result (`wait`), timeouts are opt-in,
-   no progress output.
+   result line (`serve`) or the final result (`wait`); a timeout is an
+   outcome, not an error (`wait` requires one); no progress output.
 2. **Session id** for the Explain fork: how the agent or `gk` learns it.
    A hook sees it; the agent may not.
 3. **HTTP stack.** A small synchronous server (e.g. `tiny_http`) fits a CLI
