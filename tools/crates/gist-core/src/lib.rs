@@ -62,6 +62,23 @@ pub fn emit_status<T: Serialize + Human>(data: T, code: u8, json: bool) -> ExitC
     ExitCode::from(code)
 }
 
+/// Write a successful result as a single line and flush it, for a command
+/// that keeps running after its result (docs/tool-contract.md, "Long-running
+/// subcommands"): a caller reading the first line gets all of it.
+pub fn emit_line<T: Serialize + Human>(data: &T, json: bool) {
+    use std::io::Write;
+    let line = if json {
+        serde_json::to_string(&Envelope::Ok { data }).unwrap_or_else(|_| {
+            r#"{"status":"error","message":"unserializable output"}"#.to_string()
+        })
+    } else {
+        data.human().replace('\n', " ")
+    };
+    let mut stdout = std::io::stdout().lock();
+    let _ = writeln!(stdout, "{line}");
+    let _ = stdout.flush();
+}
+
 /// Write an error to stderr and return the process exit code.
 pub fn fail(message: impl Into<String>, code: u8, json: bool) -> ExitCode {
     let message = message.into();

@@ -37,13 +37,14 @@ pub struct BlockDiff {
 }
 
 impl BlockDiff {
-    /// Whether any block changed, was added or was deleted.
-    pub fn is_empty(&self) -> bool {
-        self.deleted.is_empty()
-            && self
+    /// Blocks changed, added or deleted.
+    pub fn changed(&self) -> usize {
+        self.deleted.len()
+            + self
                 .blocks
                 .iter()
-                .all(|change| matches!(change, Change::Unchanged { .. }))
+                .filter(|change| !matches!(change, Change::Unchanged { .. }))
+                .count()
     }
 }
 
@@ -107,7 +108,7 @@ mod tests {
     #[test]
     fn an_unchanged_version_has_no_changes() {
         let result = diff(&["a", "b"], &["a", "b"]);
-        assert!(result.is_empty());
+        assert_eq!(result.changed(), 0);
         assert_eq!(
             result.blocks,
             [Change::Unchanged { old: 0 }, Change::Unchanged { old: 1 }]
@@ -133,14 +134,14 @@ mod tests {
             ]
         );
         assert_eq!(result.deleted, [Deleted { old: 1, before: 1 }]);
-        assert!(!result.is_empty());
+        assert_eq!(result.changed(), 2);
     }
 
     #[test]
     fn a_deletion_alone_is_a_change() {
         let result = diff(&["a", "b"], &["a"]);
         assert_eq!(result.deleted, [Deleted { old: 1, before: 1 }]);
-        assert!(!result.is_empty());
+        assert_eq!(result.changed(), 1);
     }
 
     #[test]

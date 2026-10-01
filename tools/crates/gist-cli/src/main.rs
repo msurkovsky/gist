@@ -7,8 +7,6 @@ mod check;
 mod doc;
 mod hook;
 mod init;
-// Built in increments; `serve` is the first caller and lifts this.
-#[allow(dead_code)]
 mod md_review;
 mod outline;
 mod skill;
@@ -61,6 +59,9 @@ enum Command {
 
     /// Install the git hooks gk provides, or run one
     Hook(hook::Args),
+
+    /// Review a markdown file in the browser, round by round, with the agent
+    MdReview(md_review::Args),
 }
 
 fn main() -> ExitCode {
@@ -115,6 +116,9 @@ fn main() -> ExitCode {
                 emit_status(report, code, cli.json)
             })
             .map_err(|message| fail(message, exit::FAILURE, cli.json)),
+        // `serve` prints its result line before it is done, so md-review
+        // emits its own output.
+        Command::MdReview(args) => Ok(md_review::run(args, cli.json)),
     };
 
     match result {
