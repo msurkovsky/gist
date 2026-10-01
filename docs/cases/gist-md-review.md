@@ -21,6 +21,14 @@ version. Its first stdout line is the URL with the token, and nothing
 follows on stdout. `.md-review/` is added to `.git/info/exclude`;
 `.gitignore` is untouched.
 
+### serve-detach
+
+`serve --detach docs/foo.md` prints only the URL and returns with exit 0,
+its stdout and stderr closed, while the server runs on in its own process
+group; `status` gives the same URL and `stop` ends it. A second
+`serve --detach` prints the same URL. A refusal, such as a missing file,
+returns the server's message and exit code and writes nothing.
+
 ### serve-reuse
 
 With a live server for the file, a second `serve` prints the same URL and
@@ -189,8 +197,8 @@ stripped, and the page makes no request outside `serve`.
 ### host-loop
 
 Request: "Review docs/foo.md with me."
-Expected: the agent starts `serve` and then `wait --timeout 110m` as
-background tasks, prints the URL and ends its turn. On a submit it edits
+Expected: the agent runs `serve --detach`, prints the URL, starts
+`wait --timeout 110m` as a background task and ends its turn. On a submit it edits
 the file, replies to every thread, runs `next`, starts `wait` again and
 ends its turn.
 
