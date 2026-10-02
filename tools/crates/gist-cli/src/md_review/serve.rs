@@ -28,7 +28,7 @@ use super::record;
 use super::render::{render, Block};
 use super::store::{
     hash, now, record_path, Anchor, Approval, Author, Event, Kind, Location, Opened, Outcome,
-    Review, ServerInfo, Store, ThreadState,
+    Review, ServerInfo, Stamp, Store, ThreadState,
 };
 
 /// Longest a long-poll is held before it answers anyway.
@@ -299,6 +299,8 @@ struct Live {
     /// round lost it. Anchors and versions never change, so the walk
     /// resumes where it stopped instead of starting over per request.
     carried: HashMap<String, (Anchor, bool)>,
+    /// The working file's hash, with the stamp it was read at.
+    working: Option<(Stamp, String)>,
     /// The current version's text, held so the record can be written even
     /// when the store can no longer be read safely.
     current: Vec<u8>,
@@ -320,6 +322,7 @@ impl Server {
                 seq: now_millis(),
                 rendered: HashMap::new(),
                 carried: HashMap::new(),
+                working: None,
                 current,
                 waiters: 0,
                 last_wait: None,
@@ -539,6 +542,9 @@ struct PollQuery {
     /// Seconds to hold the request.
     #[serde(default)]
     hold: u64,
+    /// The version whose document the page holds; the answer leaves the
+    /// document out when it is still current.
+    have: Option<u32>,
 }
 
 /// The page's view of the review, at once or when it differs from `after`.
@@ -550,13 +556,13 @@ async fn review(
         if query.after == Some(state.seq) {
             Ok(None)
         } else {
-            state.page_view().map(Some)
+            state.page_view(query.have).map(Some)
         }
     })
     .await?;
     match found {
         Some(view) => Ok(Json(view)),
-        None => Ok(Json(shared.lock().page_view()?)),
+        None => Ok(Json(shared.lock().page_view(query.have)?)),
     }
 }
 
@@ -613,7 +619,7 @@ async fn post_message(
         (Some(anchor), None) => {
             if anchor.version != review.version() {
                 return Err(ApiError::conflict(format!(
-                    "the anchor is on v{}, and the review is at v{}; reload",
+                    "this comment quotes v{}, and the review is at v{}; select the text again or discard the comment",
                     anchor.version,
                     review.version()
                 )));
@@ -1143,13 +1149,26 @@ impl Live {
     }
 
     /// Whether the working file is not version `version`, or cannot be read.
-    fn file_differs(&self, version: u32) -> bool {
-        let review = self.store.review();
-        let expected = &review.versions[version as usize - 1];
-        self.store
-            .location()
-            .read_working()
-            .map_or(true, |bytes| &hash(&bytes) != expected)
+    fn file_differs(&mut self, version: u32) -> bool {
+        let Some(working) = self.working_hash() else {
+            return true;
+        };
+        self.store.review().versions[version as usize - 1] != working
+    }
+
+    /// The working file's hash, read again only once its modification time
+    /// or length changed: every page answer asks.
+    fn working_hash(&mut self) -> Option<String> {
+        let stamp = self.store.location().working_stamp()?;
+        if let Some((seen, hash)) = &self.working {
+            if *seen == stamp {
+                return Some(hash.clone());
+            }
+        }
+        let bytes = self.store.location().read_working().ok()?;
+        let working = hash(&bytes);
+        self.working = Some((stamp, working.clone()));
+        Some(working)
     }
 
     /// The pending approval or submit, logged as delivered.
@@ -1282,7 +1301,9 @@ impl Live {
         }))
     }
 
-    fn page_view(&mut self) -> Result<PageView, ApiError> {
+    /// The review for the page; the document only when the page does not
+    /// hold version `have` already, which changes once a round.
+    fn page_view(&mut self, have: Option<u32>) -> Result<PageView, ApiError> {
         let review = self.store.review().clone();
         let version = review.version();
         let phase = if review.approval.is_some() {
@@ -1308,8 +1329,14 @@ impl Live {
             version,
             phase,
             delivered: review.submit.as_ref().and_then(|s| s.first_delivery),
-            blocks: self.blocks(version)?.to_vec(),
-            changes: self.changes(version)?,
+            document: if have == Some(version) {
+                None
+            } else {
+                Some(Document {
+                    blocks: self.blocks(version)?.to_vec(),
+                    changes: self.changes(version)?,
+                })
+            },
             threads: self.thread_views()?,
             summary: review.submit.as_ref().and_then(|s| s.summary.clone()),
             agent: AgentView {
@@ -1334,9 +1361,8 @@ struct PageView {
     /// `next`, with no `wait` running.
     #[serde(skip_serializing_if = "Option::is_none")]
     delivered: Option<u64>,
-    blocks: Vec<Block>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    changes: Option<Changes>,
+    #[serde(flatten, skip_serializing_if = "Option::is_none")]
+    document: Option<Document>,
     threads: Vec<ThreadView>,
     #[serde(skip_serializing_if = "Option::is_none")]
     summary: Option<String>,
@@ -1344,6 +1370,14 @@ struct PageView {
     file_differs: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     approval: Option<ApprovalView>,
+}
+
+/// A version's rendered blocks and its changes from the one before.
+#[derive(Serialize)]
+struct Document {
+    blocks: Vec<Block>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    changes: Option<Changes>,
 }
 
 #[derive(Serialize)]
@@ -1404,10 +1438,10 @@ fn approved(approval: &Approval) -> String {
 
 fn stale(review: &Review, round: u32, version: u32) -> String {
     if review.submit.is_some() && round == review.round {
-        format!("round {round} is submitted and the agent is revising; reload when the next round starts — drafts are kept")
+        format!("round {round} is submitted and the agent is revising; the page updates when the next round starts — drafts are kept")
     } else {
         format!(
-            "this page shows round {round}, v{version}, and the review is at round {}, v{}; reload — drafts are kept",
+            "this page shows round {round}, v{version}, and the review is at round {}, v{}; the page is catching up — drafts are kept",
             review.round,
             review.version()
         )
@@ -1997,6 +2031,17 @@ mod tests {
         let (_, changed) = fixture.call("GET", &format!("/api/review?after={seq}&hold=30"), None);
         assert!(started.elapsed() < Duration::from_secs(5));
         assert_eq!(changed["threads"][0]["id"], "t1");
+    }
+
+    #[test]
+    fn the_page_gets_the_document_only_for_a_version_it_does_not_hold() {
+        let fixture = fixture();
+        let (_, held) = fixture.call("GET", "/api/review?have=1", None);
+        assert!(held.get("blocks").is_none());
+        assert_eq!(held["version"], 1);
+
+        let (_, behind) = fixture.call("GET", "/api/review?have=0", None);
+        assert_eq!(behind["blocks"][1]["text"], "First paragraph here.");
     }
 
     #[test]

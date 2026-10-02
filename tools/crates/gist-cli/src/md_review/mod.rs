@@ -44,8 +44,8 @@ enum Command {
 
     /// Return the reviewer's submit or approval, waiting for one until the timeout
     Wait {
-        /// The reviewed file; may be left out while only one review is live
-        file: Option<PathBuf>,
+        /// The reviewed file
+        file: PathBuf,
 
         /// Give up after this long, e.g. 110m; keep it below the host's
         /// background-task limit
@@ -61,11 +61,13 @@ enum Command {
         poll: Span,
     },
 
-    /// Record the agent's answer to a thread: [FILE] THREAD
+    /// Record the agent's answer to a thread
     Reply {
-        /// The reviewed file, optional, then the thread id
-        #[arg(num_args = 1..=2, required = true, value_name = "FILE THREAD")]
-        targets: Vec<String>,
+        /// The reviewed file
+        file: PathBuf,
+
+        /// The thread id, such as t3
+        thread: String,
 
         #[arg(long)]
         outcome: ReplyOutcome,
@@ -77,14 +79,14 @@ enum Command {
 
     /// Close the submitted round and snapshot the file as the next version
     Next {
-        /// The reviewed file; may be left out while only one review is live
-        file: Option<PathBuf>,
+        /// The reviewed file
+        file: PathBuf,
     },
 
     /// Show the round, open threads, waiting clients and any undelivered submit
     Status {
-        /// The reviewed file; may be left out while only one review is live
-        file: Option<PathBuf>,
+        /// The reviewed file
+        file: PathBuf,
 
         /// List the threads of this round's submit instead of the open ones
         #[arg(long)]
@@ -101,8 +103,8 @@ enum Command {
 
     /// Stop the review server; the review is kept and `serve` resumes it
     Stop {
-        /// The reviewed file; may be left out while only one review is live
-        file: Option<PathBuf>,
+        /// The reviewed file
+        file: PathBuf,
     },
 }
 
@@ -164,28 +166,23 @@ pub fn run(args: Args, json: bool) -> ExitCode {
             timeout,
             limit,
             poll,
-        } => Client::find(file.as_deref(), true)
-            .and_then(|client| client.wait(timeout.duration, &timeout.text, limit, poll.duration))
+        } => Client::wait(&file, timeout.duration, &timeout.text, limit, poll.duration)
             .map(|delivery| emit(delivery, json)),
         Command::Reply {
-            targets,
+            file,
+            thread,
             outcome,
             note,
         } => {
-            let (file, thread) = match targets.as_slice() {
-                [thread] => (None, thread),
-                [file, thread] => (Some(PathBuf::from(file)), thread),
-                _ => unreachable!("clap takes one or two"),
-            };
             let outcome = match outcome {
                 ReplyOutcome::Applied => Outcome::Applied,
                 ReplyOutcome::Declined => Outcome::Declined,
             };
-            Client::find(file.as_deref(), true)
-                .and_then(|client| client.reply(thread, outcome, &note))
+            Client::find(&file, true)
+                .and_then(|client| client.reply(&thread, outcome, &note))
                 .map(|replied| emit(replied, json))
         }
-        Command::Next { file } => Client::find(file.as_deref(), true)
+        Command::Next { file } => Client::find(&file, true)
             .and_then(|client| client.next())
             .map(|started| emit(started, json)),
         Command::Status {
@@ -193,10 +190,10 @@ pub fn run(args: Args, json: bool) -> ExitCode {
             round,
             limit,
             offset,
-        } => Client::find(file.as_deref(), true)
+        } => Client::find(&file, true)
             .and_then(|client| client.status(round, limit, offset))
             .map(|status| emit(status, json)),
-        Command::Stop { file } => Client::find(file.as_deref(), false)
+        Command::Stop { file } => Client::find(&file, false)
             .and_then(|client| client.stop())
             .map(|stopped| emit(stopped, json)),
     };

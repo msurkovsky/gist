@@ -36,6 +36,7 @@ pub enum Delivery {
     ReviewSubmitted(Submitted),
     Approved(Approved),
     Timeout(Timeout),
+    Stopped(NotRunning),
 }
 
 /// A submitted round, for the agent to act on.
@@ -100,6 +101,13 @@ pub struct Timeout {
     pub file: String,
     /// The timeout as given, for example `110m`.
     pub after: String,
+}
+
+/// No server runs for the review: the user stopped it, or it never started
+/// in this session. The review is kept.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NotRunning {
+    pub file: String,
 }
 
 /// What `reply` recorded.
@@ -179,6 +187,7 @@ impl Human for Delivery {
             Delivery::ReviewSubmitted(submitted) => submitted.human(),
             Delivery::Approved(approved) => approved.human(),
             Delivery::Timeout(timeout) => timeout.human(),
+            Delivery::Stopped(stopped) => stopped.human(),
         }
     }
 }
@@ -306,6 +315,15 @@ impl Human for Approved {
             ));
         }
         out
+    }
+}
+
+impl Human for NotRunning {
+    fn human(&self) -> String {
+        format!(
+            "the review server for {file} is not running; the review is kept\nresume: gk md-review serve {file} --detach",
+            file = self.file
+        )
     }
 }
 
@@ -488,6 +506,7 @@ mod tests {
                 lines: [41, 44],
                 headings: vec!["Loop".to_string(), "Anchors".to_string()],
                 version: 2,
+                span: None,
             },
             orphaned: false,
             messages: vec![

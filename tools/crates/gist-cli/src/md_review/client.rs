@@ -1,5 +1,5 @@
 //! The agent's side: `wait`, `reply`, `next`, `status` and `stop` find the
-//! review's server through its `server.json` and ask it over HTTP. They
+//! named review's server through its `server.json` and ask it over HTTP. They
 //! write nothing; `serve` is the only writer. docs/design/md-review-hld.md#cli-surface.
 
 use serde::de::DeserializeOwned;
@@ -7,7 +7,7 @@ use serde::Serialize;
 use std::path::Path;
 use std::time::{Duration, Instant};
 
-use super::api::{Delivery, Replied, Started, Status, Stopped, Timeout};
+use super::api::{Delivery, NotRunning, Replied, Started, Status, Stopped, Timeout};
 use super::serve::MAX_HOLD;
 use super::store::{Location, Outcome, ServerInfo};
 
@@ -18,6 +18,14 @@ const PROBE: Duration = Duration::from_secs(2);
 /// How long `serve` waits for a server that holds the lock to answer.
 const STARTING: Duration = Duration::from_secs(3);
 
+/// Why a call got no answer.
+enum Failure {
+    /// The server is not running, or is stopping.
+    Gone,
+    /// The server refused, or did not answer in time; its message.
+    Refused(String),
+}
+
 /// A live review server, its `gk` version checked against this one's.
 pub struct Client {
     location: Location,
@@ -25,45 +33,17 @@ pub struct Client {
 }
 
 impl Client {
-    /// The server for `file`, or for the one live review when no file is
-    /// named. `stop` skips the version check, since it is the remedy for a
-    /// mismatch.
-    pub fn find(file: Option<&Path>, check_version: bool) -> Result<Self, String> {
-        let (location, info) = match file {
-            Some(file) => {
-                let location = Location::find(file)?;
-                let info = location
-                    .read_server()?
-                    .ok_or_else(|| no_server(&location))?;
-                if !probe(&info) {
-                    return Err(no_server(&location));
-                }
-                (location, info)
-            }
-            None => {
-                let cwd = std::env::current_dir()
-                    .map_err(|err| format!("could not read the current directory: {err}"))?;
-                let mut live: Vec<_> = Location::with_servers(&cwd)?
-                    .into_iter()
-                    .filter(|(_, info)| probe(info))
-                    .collect();
-                match live.len() {
-                    0 => {
-                        return Err(
-                            "no review server is running here; start one with gk md-review serve <file>"
-                                .to_string(),
-                        )
-                    }
-                    1 => live.remove(0),
-                    _ => {
-                        let files: Vec<_> = live.iter().map(|(l, _)| l.file()).collect();
-                        return Err(format!(
-                            "several reviews are live: {}; name the file",
-                            files.join(", ")
-                        ));
-                    }
-                }
-            }
+    /// The live server for `file`. `stop` skips the version check, since it
+    /// is the remedy for a mismatch.
+    pub fn find(file: &Path, check_version: bool) -> Result<Self, String> {
+        let location = Location::find(file)?;
+        Self::live(&location, check_version)?.ok_or_else(|| no_server(&location))
+    }
+
+    /// The server `location`'s `server.json` names, if it answers.
+    fn live(location: &Location, check_version: bool) -> Result<Option<Self>, String> {
+        let Some(info) = location.read_server()?.filter(probe) else {
+            return Ok(None);
         };
         let mine = env!("CARGO_PKG_VERSION");
         if check_version && info.version != mine {
@@ -74,7 +54,10 @@ impl Client {
                 theirs = info.version
             ));
         }
-        Ok(Self { location, info })
+        Ok(Some(Self {
+            location: location.clone(),
+            info,
+        }))
     }
 
     fn file(&self) -> &str {
@@ -89,44 +72,54 @@ impl Client {
         path: &str,
         body: Option<&impl Serialize>,
         timeout: Duration,
-    ) -> Result<Option<T>, String> {
+    ) -> Result<Option<T>, Failure> {
         let response = send(&self.info, method, path, body, timeout).map_err(|err| match err {
-            ureq::Error::Timeout(_) => format!(
+            ureq::Error::Timeout(_) => Failure::Refused(format!(
                 "the review server for {} did not answer within {}s",
                 self.file(),
                 timeout.as_secs()
-            ),
-            _ => format!(
-                "the review server for {file} stopped; start it again with gk md-review serve {file}",
-                file = self.file()
-            ),
+            )),
+            _ => Failure::Gone,
         })?;
         read(response, self.file())
     }
 
     /// Return a pending submit or approval, or the first to arrive before
-    /// `timeout`, asking in requests of at most `poll`.
+    /// `timeout`, asking in requests of at most `poll`. A server that is
+    /// not running, or stops meanwhile, is an outcome, not a failure.
     pub fn wait(
-        &self,
+        file: &Path,
         timeout: Duration,
         after: &str,
         limit: usize,
         poll: Duration,
     ) -> Result<Delivery, String> {
+        let location = Location::find(file)?;
+        let stopped = || {
+            Delivery::Stopped(NotRunning {
+                file: location.file().to_string(),
+            })
+        };
+        let Some(client) = Self::live(&location, true)? else {
+            return Ok(stopped());
+        };
         let deadline = Instant::now() + timeout;
         loop {
             let left = deadline.saturating_duration_since(Instant::now());
             if left.is_zero() {
                 return Ok(Delivery::Timeout(Timeout {
-                    file: self.file().to_string(),
+                    file: client.file().to_string(),
                     after: after.to_string(),
                 }));
             }
             let hold = left.min(poll).min(MAX_HOLD).as_secs_f64().ceil() as u64;
             let path = format!("/api/wait?hold={hold}&limit={limit}");
             let timeout = Duration::from_secs(hold) + ANSWER;
-            if let Some(delivery) = self.call::<Delivery>("GET", &path, None::<&()>, timeout)? {
-                return Ok(delivery);
+            match client.call::<Delivery>("GET", &path, None::<&()>, timeout) {
+                Ok(Some(delivery)) => return Ok(delivery),
+                Ok(None) => {}
+                Err(Failure::Gone) => return Ok(stopped()),
+                Err(Failure::Refused(message)) => return Err(message),
             }
         }
     }
@@ -163,8 +156,18 @@ impl Client {
         path: &str,
         body: Option<&impl Serialize>,
     ) -> Result<T, String> {
-        self.call(method, path, body, ANSWER)?
-            .ok_or_else(|| format!("the review server for {} answered nothing", self.file()))
+        match self.call(method, path, body, ANSWER) {
+            Ok(Some(data)) => Ok(data),
+            Ok(None) => Err(format!(
+                "the review server for {} answered nothing",
+                self.file()
+            )),
+            Err(Failure::Gone) => Err(format!(
+                "the review server for {file} stopped; start it again with gk md-review serve {file}",
+                file = self.file()
+            )),
+            Err(Failure::Refused(message)) => Err(message),
+        }
     }
 }
 
@@ -229,20 +232,20 @@ fn send(
 fn read<T: DeserializeOwned>(
     mut response: ureq::http::Response<ureq::Body>,
     file: &str,
-) -> Result<Option<T>, String> {
+) -> Result<Option<T>, Failure> {
     let status = response.status();
     if status == ureq::http::StatusCode::NO_CONTENT {
         return Ok(None);
     }
     if status.is_success() {
         return response.body_mut().read_json().map(Some).map_err(|err| {
-            format!("the review server for {file} sent an unreadable answer: {err}")
+            Failure::Refused(format!(
+                "the review server for {file} sent an unreadable answer: {err}"
+            ))
         });
     }
     if status == ureq::http::StatusCode::SERVICE_UNAVAILABLE {
-        return Err(format!(
-            "the review server for {file} stopped; start it again with gk md-review serve {file}"
-        ));
+        return Err(Failure::Gone);
     }
     let message = response
         .body_mut()
@@ -250,7 +253,7 @@ fn read<T: DeserializeOwned>(
         .ok()
         .and_then(|value| value["message"].as_str().map(str::to_string))
         .unwrap_or_else(|| format!("the review server for {file} answered {status}"));
-    Err(message)
+    Err(Failure::Refused(message))
 }
 
 fn no_server(location: &Location) -> String {

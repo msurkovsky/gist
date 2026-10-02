@@ -5,7 +5,7 @@
 //! docs/design/md-review-dld-page.md#re-anchoring-after-a-round.
 
 use super::render::Block;
-use super::store::Anchor;
+use super::store::{Anchor, Point, Span};
 
 const CONTEXT_CHARS: usize = 40;
 
@@ -44,25 +44,33 @@ pub fn reanchor(anchor: &Anchor, old: &[Block], new: &[Block], version: u32) -> 
     Some(after_text.anchor_at(at, &anchor.quote, quote.len(), version))
 }
 
-/// A version's text with whitespace removed, and the block each byte of it
-/// came from.
+/// A version's text with whitespace removed, the block each byte of it
+/// came from, and where each block starts in it.
 struct Text<'a> {
     blocks: &'a [Block],
     key: String,
     owner: Vec<usize>,
+    starts: Vec<usize>,
 }
 
 impl<'a> Text<'a> {
     fn new(blocks: &'a [Block]) -> Self {
         let mut key = String::new();
         let mut owner = Vec::new();
+        let mut starts = Vec::new();
         for (index, block) in blocks.iter().enumerate() {
+            starts.push(key.len());
             for c in block.text.chars().filter(|c| !c.is_whitespace()) {
                 key.push(c);
                 owner.resize(key.len(), index);
             }
         }
-        Self { blocks, key, owner }
+        Self {
+            blocks,
+            key,
+            owner,
+            starts,
+        }
     }
 
     /// Every start of `needle`, overlapping ones included.
@@ -102,6 +110,18 @@ impl<'a> Text<'a> {
             lines: [self.blocks[first].lines[0], self.blocks[last].lines[1]],
             headings: self.blocks[first].headings.clone(),
             version,
+            span: Some(Span {
+                start: self.point(first, at),
+                end: self.point(last, at + len),
+            }),
+        }
+    }
+
+    /// The point at byte `at` of the key, in `block`.
+    fn point(&self, block: usize, at: usize) -> Point {
+        Point {
+            block: block as u32,
+            at: self.key[self.starts[block]..at].chars().count() as u32,
         }
     }
 }
@@ -124,6 +144,7 @@ mod tests {
             lines: [0, 0],
             headings: headings.iter().map(|h| h.to_string()).collect(),
             version: 1,
+            span: None,
         }
     }
 
@@ -220,5 +241,8 @@ mod tests {
         let found = moved(&thread, text, text).expect("attached");
         assert_eq!(found.blocks, [1, 2]);
         assert_eq!(found.lines, [3, 5]);
+        let span = found.span.expect("placed");
+        assert_eq!((span.start.block, span.start.at), (1, 3));
+        assert_eq!((span.end.block, span.end.at), (2, 10));
     }
 }

@@ -1,7 +1,7 @@
 // Case: docs/cases/gist-md-review.md#page-anchor
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { anchorFor, chars, locate, slice, visible } from "./anchor.js";
+import { anchorFor, chars, slice, visible } from "./anchor.js";
 
 // Blocks as `serve` sends them for:
 //   # Loop / Intro text. / ## Anchors / the quoted text here / mermaid / table / ---
@@ -33,6 +33,7 @@ test("a selection inside a block quotes it with its context, lines and headings"
     lines: [7, 8],
     headings: ["Loop", "Anchors"],
     version: 2,
+    span: { start: { block: 3, at: 3 }, end: { block: 3, at: 13 } },
   });
 });
 
@@ -91,24 +92,10 @@ test("a slice keeps the whitespace inside and trims the ends", () => {
   assert.equal(slice("ab", 0, 2), "ab");
 });
 
-test("an anchor is found again where it was made", () => {
+test("an anchor records where its selection starts and ends", () => {
   const anchor = anchorFor(blocks, { block: 1, at: 5 }, { block: 3, at: 3 }, 1);
-  assert.deepEqual(locate(blocks, anchor), { start: { block: 1, at: 5 }, end: { block: 3, at: 3 } });
-});
-
-test("of several copies, the one its context fits is found", () => {
-  const copies = [
-    { kind: "paragraph", text: "first same here", lines: [1, 1], headings: [] },
-    { kind: "paragraph", text: "second same here", lines: [3, 3], headings: [] },
-  ];
-  const anchor = { quote: "same", prefix: "second", suffix: "here", blocks: [0] };
-  assert.deepEqual(locate(copies, anchor), { start: { block: 1, at: 6 }, end: { block: 1, at: 10 } });
-  // Without context that fits, its first block decides.
-  const loose = { quote: "same", prefix: "gone", suffix: "", blocks: [1] };
-  assert.equal(locate(copies, loose).start.block, 1);
-});
-
-test("an anchor whose quote is gone is not found", () => {
-  assert.equal(locate(blocks, { quote: "absent", prefix: "", suffix: "", blocks: [0] }), null);
-  assert.equal(locate(blocks, { quote: " ", prefix: "", suffix: "", blocks: [0] }), null);
+  assert.deepEqual(anchor.span, { start: { block: 1, at: 5 }, end: { block: 3, at: 3 } });
+  // Taken whole, a block's span covers all of it.
+  const inside = anchorFor(blocks, { block: 5, at: 1 }, { block: 5, at: 2 }, 1);
+  assert.deepEqual(inside.span, { start: { block: 5, at: 0 }, end: { block: 5, at: 4 } });
 });

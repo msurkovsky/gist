@@ -18,10 +18,8 @@ A background `wait` wakes you on each submit; between rounds you are idle.
   exits. Claude Code does: a Bash call with `run_in_background` and a
   `timeout` of 7200000 (120 minutes). Without one, say md-review needs
   Claude Code and stop.
-- One markdown file, at most 1 MiB, inside the working tree.
-
-Pass the file to every `gk md-review` command, so a review started from
-another session never answers this one.
+- One markdown file, at most 1 MiB, inside the working tree. Every
+  `gk md-review` command takes it.
 
 ## Start, or continue
 
@@ -68,7 +66,8 @@ Its first line says what happened. The output format, line by line:
    and keep the change to what it asks. Where it is wrong, unclear or out
    of scope, leave the text and say why. Answer a question in the note,
    and in the file too when readers would ask it as well. An `orphaned`
-   thread's quote is gone from the file; still answer it.
+   thread's quote is gone from the file; still answer it. A thread shows
+   its whole history; answer its newest reviewer message.
 4. **Reply to every thread** not yet replied to, with one or two
    sentences saying what changed or why not:
 
@@ -107,12 +106,14 @@ the record as review evidence.
 Nothing was submitted. Start the same wait again in the background. Say
 nothing, or one line at most.
 
+### `the review server … is not running`
+
+The user stopped it, or the machine restarted. Say so in one line. Start
+no further wait. Resume with `serve --detach` only when the user asks; the
+review and the page's drafts are kept.
+
 ### The wait exits 1
 
-- **The server stopped**, or **no review server runs**: the user stopped
-  it, or the machine restarted. Say so in one line. Resume with `serve
-  --detach` only when the user asks; the review and the page's drafts
-  are kept.
 - **A version mismatch** names `gk md-review stop`: `gk` was upgraded
   under a running server. Run that `stop`, then `serve --detach`; the
   review resumes at the same URL. Then wait again.
@@ -125,4 +126,4 @@ shorter `--timeout`, below the limit.
 
 When the user asks to stop or pause: `gk md-review stop docs/plan.md`.
 The review is kept; `serve --detach` resumes it later. The running wait
-then exits 1; do not restart it.
+then reports the server not running; do not restart it.

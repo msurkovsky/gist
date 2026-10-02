@@ -541,9 +541,16 @@ fn a_page_open_across_a_restart_is_answered_at_once() {
 fn a_signal_ends_the_server_promptly_even_with_a_wait_blocked() {
     let repo = Repo::new();
     let mut server = repo.serve("docs/foo.md");
-    let mut wait = repo
-        .command(&["md-review", "wait", "docs/foo.md", "--timeout", "60s"])
-        .stdout(Stdio::null())
+    let wait = repo
+        .command(&[
+            "--json",
+            "md-review",
+            "wait",
+            "docs/foo.md",
+            "--timeout",
+            "60s",
+        ])
+        .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
         .unwrap();
@@ -554,8 +561,14 @@ fn a_signal_ends_the_server_promptly_even_with_a_wait_blocked() {
         .unwrap();
     assert!(status.success());
     assert_eq!(server.exit(Duration::from_secs(3)), 0);
-    let output = wait.wait().unwrap();
-    assert_eq!(output.code(), Some(1), "the wait learns the server stopped");
+    let output = wait.wait_with_output().unwrap();
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "a stopped server is an outcome"
+    );
+    let value: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(value["data"]["event"], "stopped");
     assert!(repo.store().join("events.jsonl").is_file());
 }
 
@@ -564,7 +577,6 @@ fn a_signal_ends_the_server_promptly_even_with_a_wait_blocked() {
 fn clients_without_a_server_exit_1_naming_serve() {
     let repo = Repo::new();
     for args in [
-        vec!["md-review", "wait", "docs/foo.md", "--timeout", "1s"],
         vec![
             "md-review",
             "reply",
@@ -577,7 +589,6 @@ fn clients_without_a_server_exit_1_naming_serve() {
         ],
         vec!["md-review", "next", "docs/foo.md"],
         vec!["md-review", "status", "docs/foo.md"],
-        vec!["md-review", "status"],
     ] {
         let (code, message) = repo.error(&args);
         assert_eq!(code, 1, "{args:?}");
@@ -624,26 +635,33 @@ fn a_client_of_another_version_exits_1_naming_stop_and_stop_still_works() {
     assert_eq!(server.exit(Duration::from_secs(5)), 0);
 }
 
-// Case: docs/cases/gist-md-review.md#client-which-review
+// Case: docs/cases/gist-md-review.md#client-no-server
 #[test]
-fn without_a_file_a_client_uses_the_one_live_review_or_lists_them() {
+fn a_wait_without_a_server_reports_it_stopped() {
     let repo = Repo::new();
-    repo.write("docs/bar.md", "# Bar\n");
-    let _foo = repo.serve("docs/foo.md");
-    let mut bar = repo.serve("docs/bar.md");
+    let data = repo.data(&["md-review", "wait", "docs/foo.md", "--timeout", "1s"]);
+    assert_eq!(data["event"], "stopped");
+    assert_eq!(data["file"], "docs/foo.md");
+}
 
-    let (code, message) = repo.error(&["md-review", "status"]);
-    assert_eq!(code, 1);
-    assert!(message.contains("docs/bar.md, docs/foo.md"), "{message}");
-    assert_eq!(
-        repo.data(&["md-review", "status", "docs/bar.md"])["file"],
-        "docs/bar.md"
-    );
-
-    // Killed, so its server.json stays behind, naming a dead server.
-    bar.child.kill().unwrap();
-    bar.exit(Duration::from_secs(5));
-    assert_eq!(repo.data(&["md-review", "status"])["file"], "docs/foo.md");
+// Case: docs/cases/gist-md-review.md#client-file-required
+#[test]
+fn every_client_requires_the_file() {
+    let repo = Repo::new();
+    for command in ["wait", "next", "status", "stop"] {
+        let (code, _, _) = repo.gk(&["md-review", command]);
+        assert_eq!(code, 2, "{command}");
+    }
+    let (code, _, _) = repo.gk(&[
+        "md-review",
+        "reply",
+        "t1",
+        "--outcome",
+        "applied",
+        "--note",
+        "x",
+    ]);
+    assert_eq!(code, 2, "reply takes the file and the thread");
 }
 
 // Case: docs/cases/gist-md-review.md#wait-pending
