@@ -52,6 +52,15 @@ deployment, so no full eng review; the steps below replace it, in order:
 4. ~~Implement, starting with the store, log and lock (ADR 0014).~~ Done
    2026-10-01: slice 1 built; first trial recorded in
    `docs/cases/gist-md-review.md`.
+5. Trial the current build before calling slice 1 shipped. Trial 1 ran
+   on `95d1390`; two refactors since changed what the agent sees.
+   Exercise the cases no trial has: host-timeout-restart,
+   host-redelivered, host-comment-not-instruction, host-non-trigger,
+   and `gk` missing from PATH (no case yet; add one). Record it as
+   Trial 3 in `docs/cases/gist-md-review.md`.
+6. Ship: decide the "fix from use" below, get an independent review
+   of the branch, merge, then move the HLD's lasting parts to
+   `architecture.md`, the cases and the ADRs, and drop this entry.
 
 Fix from use: a mouse selection opens the comment draft at once. Keep
 the selection visible first and open the draft from an icon or button
