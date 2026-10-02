@@ -57,7 +57,7 @@ The agent channel for slice 1 is the `gk` CLI, not MCP:
   its own and returns once it has printed the URL. The server must run for
   the whole review, and the host stops a background task at its limit, so
   it is not a host task; `wait` is the only one.
-- `gk md-review wait --timeout <dur>` returns a pending submit or approval
+- `gk md-review wait <file> --timeout <dur>` returns a pending submit or approval
   at once, or blocks until one arrives, prints it, and exits 0. When the
   timeout fires first it prints a `timeout` event and exits 0; the skill
   starts it again. When no server is running for the file, or the server
@@ -152,6 +152,7 @@ with a test flag instead of sleeping.
 
 | When | Who | Why |
 |---|---|---|
+| 2026-10-02 22:23 | Martin Surkovsky | Name the file in the `wait` command, which now requires it |
 | 2026-10-02 21:55 | Martin Surkovsky | A stopped server is a `wait` outcome, not exit 1 |
 | 2026-10-01 22:28 | Martin Surkovsky | `serve` detaches instead of running as a background task, which the host would stop at its limit |
 | 2026-10-01 17:44 | Martin Surkovsky | The tool contract section now exists |

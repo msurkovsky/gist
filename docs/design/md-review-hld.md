@@ -262,7 +262,7 @@ sequenceDiagram
   S->>FS: snapshot v1, write server.json (with gk version)
   S-->>A: URL with token (stdout, first line); the caller returns
   A->>H: prints the URL
-  A->>S: gk md-review wait (background task, blocks)
+  A->>S: gk md-review wait docs/foo.md (background task, blocks)
   H->>B: opens URL
   B->>S: GET / → rendered v1
 ```
@@ -311,11 +311,11 @@ sequenceDiagram
   W-->>A: exits 0 → Claude Code wakes the agent
   A->>F: edits the file
   loop each comment
-    A->>S: gk md-review reply <thread> --outcome applied|declined --note "…"
+    A->>S: gk md-review reply docs/foo.md <thread> --outcome applied|declined --note "…"
   end
-  A->>S: gk md-review next
+  A->>S: gk md-review next docs/foo.md
   S->>S: snapshot vN+1 with hash, re-anchor open threads, append round_started
-  A->>S: gk md-review wait (background task)
+  A->>S: gk md-review wait docs/foo.md (background task)
   B->>S: long-poll sees round N+1
   B->>S: GET / → vN+1 with changed blocks marked, replies shown per thread
 ```
@@ -568,7 +568,7 @@ open) and `discarded` the threads still pending at approve, never sent to
 the agent. The record holds the rest. `summary`, `note` and `discarded`
 are omitted when empty. Bounded: a submit with more
 threads than `--limit` reports `truncated`, and the agent pages with
-`gk md-review status --round N`.
+`gk md-review status <file> --round N`.
 
 `{"event": "timeout", "after": "110m"}` when `--timeout` expires with
 nothing pending; the skill starts `wait` again.
@@ -612,7 +612,9 @@ A refusal answers `{"message": "…"}` and appends nothing.
 | `POST /api/stop` | `stop` | end the server, keep the store |
 
 Page writes carry `round` and `version`; one against another round or
-version, or after submit or approval, gets 409. `reply` and `next` get 409
+version, or after submit or approval, gets 409. Edit, delete, resolve and
+submit answer 204 with no body; the page learns the new state from its
+long-poll. `reply` and `next` get 409
 unless a submitted round waits for them, and after approval.
 
 ## CLI surface

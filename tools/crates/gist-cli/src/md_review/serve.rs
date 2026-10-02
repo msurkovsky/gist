@@ -5,7 +5,11 @@
 //! differ are synchronous and are called under one mutex.
 //! docs/design/md-review-hld.md; docs/adr/0015-md-review-http-stack.md.
 
-use axum::extract::{Path as UrlPath, Query, Request, State as Shared_};
+use axum::extract::rejection::{JsonRejection, QueryRejection};
+use axum::extract::{
+    FromRequest, FromRequestParts, Path as UrlPath, Query, Request, State as Shared_,
+};
+use axum::http::request::Parts;
 use axum::http::{header, HeaderMap, HeaderValue, StatusCode};
 use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
@@ -472,6 +476,42 @@ impl IntoResponse for ApiError {
 
 type ApiResult<T> = Result<Json<T>, ApiError>;
 
+/// A JSON body; one that does not parse is refused as every refusal is.
+struct Body<T>(T);
+
+impl<T, S> FromRequest<S> for Body<T>
+where
+    Json<T>: FromRequest<S, Rejection = JsonRejection>,
+    S: Send + Sync,
+{
+    type Rejection = ApiError;
+
+    async fn from_request(request: Request, state: &S) -> Result<Self, ApiError> {
+        match Json::<T>::from_request(request, state).await {
+            Ok(Json(value)) => Ok(Self(value)),
+            Err(rejection) => Err(ApiError::new(rejection.status(), rejection.body_text())),
+        }
+    }
+}
+
+/// A query string; one that does not parse is refused as every refusal is.
+struct Params<T>(T);
+
+impl<T, S> FromRequestParts<S> for Params<T>
+where
+    Query<T>: FromRequestParts<S, Rejection = QueryRejection>,
+    S: Send + Sync,
+{
+    type Rejection = ApiError;
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, ApiError> {
+        match Query::<T>::from_request_parts(parts, state).await {
+            Ok(Query(value)) => Ok(Self(value)),
+            Err(rejection) => Err(ApiError::new(rejection.status(), rejection.body_text())),
+        }
+    }
+}
+
 async fn page() -> Response {
     let mut response = PAGE.into_response();
     let headers = response.headers_mut();
@@ -553,7 +593,7 @@ struct PollQuery {
 /// The page's view of the review, at once or when it differs from `after`.
 async fn review(
     Shared_(shared): Shared_<Arc<Server>>,
-    Query(query): Query<PollQuery>,
+    Params(query): Params<PollQuery>,
 ) -> ApiResult<PageView> {
     let found = long_poll(&shared, Duration::from_secs(query.hold), |state| {
         if query.after == Some(state.seq) {
@@ -592,7 +632,7 @@ struct PostedView {
 /// A reviewer's comment: a new thread on an anchor, or a reply in one.
 async fn post_message(
     Shared_(shared): Shared_<Arc<Server>>,
-    Json(body): Json<PostBody>,
+    Body(body): Body<PostBody>,
 ) -> ApiResult<PostedView> {
     let mut state = shared.lock();
     if state.store.review().has_message(&body.message) {
@@ -673,7 +713,7 @@ struct At {
 async fn edit(
     Shared_(shared): Shared_<Arc<Server>>,
     UrlPath(id): UrlPath<String>,
-    Json(body): Json<EditBody>,
+    Body(body): Body<EditBody>,
 ) -> Result<StatusCode, ApiError> {
     let mut state = shared.lock();
     state.check_current(body.round, body.version)?;
@@ -689,7 +729,7 @@ async fn edit(
 async fn delete(
     Shared_(shared): Shared_<Arc<Server>>,
     UrlPath(id): UrlPath<String>,
-    Json(at): Json<At>,
+    Body(at): Body<At>,
 ) -> Result<StatusCode, ApiError> {
     let mut state = shared.lock();
     state.check_current(at.round, at.version)?;
@@ -701,7 +741,7 @@ async fn delete(
 async fn resolve(
     Shared_(shared): Shared_<Arc<Server>>,
     UrlPath(id): UrlPath<String>,
-    Json(at): Json<At>,
+    Body(at): Body<At>,
 ) -> Result<StatusCode, ApiError> {
     let mut state = shared.lock();
     state.check_current(at.round, at.version)?;
@@ -720,7 +760,7 @@ struct SubmitBody {
 /// as the first did and appends nothing.
 async fn submit(
     Shared_(shared): Shared_<Arc<Server>>,
-    Json(body): Json<SubmitBody>,
+    Body(body): Body<SubmitBody>,
 ) -> Result<StatusCode, ApiError> {
     let mut state = shared.lock();
     let review = state.store.review();
@@ -771,7 +811,7 @@ struct ApprovedView {
 /// anything is delivered or deleted.
 async fn approve(
     Shared_(shared): Shared_<Arc<Server>>,
-    Json(body): Json<ApproveBody>,
+    Body(body): Body<ApproveBody>,
 ) -> ApiResult<ApprovedView> {
     let mut state = shared.lock();
     let review = state.store.review();
@@ -849,7 +889,7 @@ impl Drop for Presence {
 /// after the first is marked as a repeat.
 async fn wait(
     Shared_(shared): Shared_<Arc<Server>>,
-    Query(query): Query<WaitQuery>,
+    Params(query): Params<WaitQuery>,
 ) -> Result<Response, ApiError> {
     let _presence = Presence::enter(&shared);
     let found = long_poll(&shared, Duration::from_secs(query.hold), |state| {
@@ -877,7 +917,7 @@ struct ReplyBody {
 /// The agent's answer to a thread of the submitted round.
 async fn reply(
     Shared_(shared): Shared_<Arc<Server>>,
-    Json(body): Json<ReplyBody>,
+    Body(body): Body<ReplyBody>,
 ) -> ApiResult<Replied> {
     let mut state = shared.lock();
     state.check_agent_turn()?;
@@ -951,7 +991,7 @@ struct StatusQuery {
 
 async fn status(
     Shared_(shared): Shared_<Arc<Server>>,
-    Query(query): Query<StatusQuery>,
+    Params(query): Params<StatusQuery>,
 ) -> ApiResult<Status> {
     let mut state = shared.lock();
     let listed = match query.round {
@@ -1884,6 +1924,19 @@ mod tests {
     }
 
     #[test]
+    fn a_request_that_does_not_parse_is_refused_with_a_message() {
+        let fixture = fixture();
+        let before = fixture.lines();
+        let (status, body) = fixture.call("POST", "/api/submit", Some(json!({ "summary": 3 })));
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+        assert!(body["message"].is_string(), "{body}");
+        let (status, body) = fixture.call("GET", "/api/status?limit=many", None);
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert!(body["message"].is_string(), "{body}");
+        assert_eq!(fixture.lines(), before);
+    }
+
+    #[test]
     fn a_question_waits_for_the_explain_flow() {
         let fixture = fixture();
         let before = fixture.lines();
@@ -1921,10 +1974,15 @@ mod tests {
             StatusCode::OK
         );
         let answered = json!({ "thread": "t1", "outcome": "answered", "note": "?" });
+        let (status, body) = fixture.call("POST", "/api/reply", Some(answered));
         assert_eq!(
-            fixture.call("POST", "/api/reply", Some(answered)).0,
+            status,
             StatusCode::UNPROCESSABLE_ENTITY,
             "answering is the answerer's"
+        );
+        assert!(
+            body["message"].as_str().unwrap().contains("outcome"),
+            "{body}"
         );
         let unknown = json!({ "thread": "t9", "outcome": "declined", "note": "?" });
         assert_eq!(
