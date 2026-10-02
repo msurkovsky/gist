@@ -52,6 +52,12 @@ Slice 2, designed but deferred:
 - **Images with relative paths.** `serve` serves only the page and its own
   assets, so an image the markdown names by a repository path does not
   load. Serving them needs a confined path under the file's directory.
+  An image cannot be commented on either: a selection over an image alone
+  quotes nothing, and the server refuses it. Slice 2 lets a selection take
+  an image whole, as it takes a diagram.
+- **Link from an applied thread to its change.** Slice 1 cards say only
+  "applied in round N". When the anchor's lines overlap a block changed
+  in that round, the card links to it.
 
 Parked, designed for but not built:
 
@@ -215,8 +221,9 @@ docs/foo.md · round 2 · 3 pending   [Show changes ✓]  [Submit review]  [Appr
   is built. A pending comment can be edited or deleted until submit.
 - **Submit review** opens a dialog: an optional overall comment and the list
   of pending comments. Submit is possible with inline comments, an overall
-  comment, or both. With neither there is nothing to send; the button is
-  disabled and Approve is the way out.
+  comment, or both. With neither there is nothing to send; the dialog's
+  Submit is disabled, the server refuses an empty submit, and Approve is
+  the way out.
 - **Approve** opens a small confirm with an optional note, and needs no
   comments. It is available at any time, also while the agent is revising;
   the confirm then warns that the approval covers the version on screen,
@@ -229,8 +236,8 @@ docs/foo.md · round 2 · 3 pending   [Show changes ✓]  [Submit review]  [Appr
 - **Show changes** marks the blocks changed since the previous version;
   deleted blocks show as struck stubs.
 - **Connection indicator**, always visible: agent listening, agent
-  revising, agent away (with the request that resumes the review, to give
-  the agent), or server offline. The page reconnects to `serve` by itself and keeps unsent drafts
+  revising, agent not listening yet, agent away (both with the request
+  that resumes the review, to give the agent), or server offline. The page reconnects to `serve` by itself and keeps unsent drafts
   in browser storage until `serve` accepts them.
 - **Banners** say when the working file differs from the version on
   screen, and when a write was refused because the page is stale (reload;
@@ -452,7 +459,7 @@ seconds since the Unix epoch. Current state is a fold over the log.
 | Event | Fields |
 |---|---|
 | `review_started` | format (1), file, version 1, hash; slice 2 adds host, model, effort, session (optional) |
-| `message_posted` | thread, message, author (`human`/`agent`), kind (`comment`/`question`), body, anchor (new thread only), outcome (agent only: `applied`/`declined`/`answered`), model (answerer only) |
+| `message_posted` | thread, message, author (`human`/`agent`), kind (`comment`; `question` with Explain), body, anchor (new thread only), outcome (agent only: `applied`/`declined`; `answered` with Explain); Explain adds model (answerer only) |
 | `message_edited` | message, body (reviewer's own pending message only) |
 | `message_deleted` | message (reviewer's own pending message only) |
 | `review_submitted` | round, summary (optional) |
@@ -491,8 +498,8 @@ Re-anchoring runs on the server, against rendered text, not markdown
 source: a quote over `**bold**`, a link or a code span would never match
 the source. The renderer emits each block's plain text with its source
 lines; the page sends the quote and the blocks it touches; the server
-matches the quote in the next version's plain text under a whitespace
-normalisation rule. A quote found without its context is re-attached only
+matches the quote in the next version's plain text with all whitespace
+ignored, across block boundaries, so a quote may span blocks. A quote found without its context is re-attached only
 when it occurs once under the same heading path in both the old and the
 new version; anything else is orphaned rather than guessed. Steps in the
 [page DLD](md-review-dld-page.md#re-anchoring-after-a-round).
@@ -521,7 +528,7 @@ summary
   Why is the token not enough?
   ↳ The token keeps other pages out; the Host check stops DNS rebinding.
 
-next: gk md-review reply <id> --outcome applied|declined --note "…", then gk md-review next
+next: gk md-review reply docs/foo.md <id> --outcome applied|declined --note "…", then gk md-review next docs/foo.md
 ```
 
 The skill owns the procedure; the output carries data and a one-line
@@ -537,18 +544,23 @@ JSON rendering:
   "event": "review_submitted",
   "file": "docs/foo.md",
   "round": 2,
+  "version": 2,
   "summary": "Good structure. Cut the security section by half.",
   "threads": [
     {"id": "t7", "anchor": {…}, "messages": [
       {"author": "human", "kind": "comment", "body": "Too long; one sentence."}
     ]}
-  ]
+  ],
+  "total": 1
 }}
 ```
 
-Or `{"event": "approved", "round": N, "version": N, "note": "…", "record":
-"<path>", "file_differs": false}` with a bounded summary of the record.
-`summary` and `note` are omitted when empty. Bounded: a submit with more
+Or `{"event": "approved", "file": "docs/foo.md", "round": N, "version": N,
+"note": "…", "record": "<path>", "file_differs": false, "threads": {…},
+"discarded": […]}`: `threads` is the tally (total, applied, resolved,
+open) and `discarded` the threads still pending at approve, never sent to
+the agent. The record holds the rest. `summary`, `note` and `discarded`
+are omitted when empty. Bounded: a submit with more
 threads than `--limit` reports `truncated`, and the agent pages with
 `gk md-review status --round N`.
 
@@ -597,13 +609,14 @@ unless a submitted round waits for them, and after approval.
 | Command | Does | Exit |
 |---|---|---|
 | `gk md-review serve <file> [--detach]` | starts or reuses the server, prints the URL; with `--detach` the server runs on its own and the command returns | runs until approval is delivered, or stop; with `--detach`, 0 once the URL is printed, else the server's exit code and message; 0 when reusing a live server; 1 on bind failure, unknown log format, file over 1 MiB or not UTF-8 |
-| `gk md-review wait [<file>] --timeout <dur>` | returns a pending submit or approval, or blocks until one or the timeout | 0 on event or timeout; 1 on no server or version mismatch |
+| `gk md-review wait [<file>] --timeout <dur> [--limit N]` | returns a pending submit or approval, or blocks until one or the timeout | 0 on event or timeout; 1 on no server or version mismatch |
 | `gk md-review reply [<file>] <thread> --outcome … --note …` | records the agent's answer to a thread | 0 / 1; 1 unless a submitted round waits, and after approval, naming it |
 | `gk md-review next [<file>]` | closes the round, snapshots the next version | 0 / 1; 1 unless a submitted round waits, after approval naming it, and on a file over 1 MiB or not UTF-8 |
-| `gk md-review status [<file>] [--round N] [--offset N]` | current round, open threads, waiters, undelivered submit; with `--round`, that round's submitted threads, paged by `--limit` and `--offset` | 0 / 1 |
+| `gk md-review status [<file>] [--round N] [--limit N] [--offset N]` | current round, open threads, waiters, undelivered submit; with `--round`, that round's submitted threads, paged by `--limit` and `--offset` | 0 / 1 |
 | `gk md-review stop [<file>]` | stops the server, keeps the store | 0 / 1 |
 
-All take `--json` and follow the envelope in `docs/tool-contract.md`.
+`--limit` caps the threads listed and defaults to 25. All take `--json`
+and follow the envelope in `docs/tool-contract.md`.
 Clients take the reviewed file. Without it, they use the one live review,
 found through the `file` in each `server.json`, or exit 1 listing the live
 ones when there are several. The skill always
