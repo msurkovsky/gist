@@ -10,7 +10,7 @@ pub mod render;
 pub mod serve;
 pub mod store;
 
-use clap::{Args as ClapArgs, Subcommand, ValueEnum};
+use clap::{Args as ClapArgs, Subcommand};
 use gist_core::{emit, emit_line, exit, fail};
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -18,7 +18,7 @@ use std::time::Duration;
 
 use client::Client;
 use serve::Detached;
-use store::Outcome;
+use store::ReplyOutcome;
 
 const DEFAULT_LIMIT: usize = 25;
 
@@ -108,12 +108,6 @@ enum Command {
     },
 }
 
-#[derive(Clone, Copy, Debug, ValueEnum)]
-enum ReplyOutcome {
-    Applied,
-    Declined,
-}
-
 /// A duration as written on the command line, kept for echoing back.
 #[derive(Clone, Debug)]
 struct Span {
@@ -145,9 +139,7 @@ fn parse_span(text: &str) -> Result<Span, String> {
 /// its result before it is done.
 pub fn run(args: Args, json: bool) -> ExitCode {
     let done = match args.command {
-        Command::Serve {
-            file, detach: true, ..
-        } => match serve::detach(&file, json) {
+        Command::Serve { file, detach: true } => match serve::detach(&file, json) {
             Ok(Detached::Line(line)) => {
                 println!("{line}");
                 Ok(ExitCode::from(exit::OK))
@@ -158,9 +150,10 @@ pub fn run(args: Args, json: bool) -> ExitCode {
             }
             Err(message) => Err(message),
         },
-        Command::Serve { file, .. } => {
-            serve::run(&file, |served| emit_line(served, json)).map(|()| ExitCode::from(exit::OK))
-        }
+        Command::Serve {
+            file,
+            detach: false,
+        } => serve::run(&file, |served| emit_line(served, json)).map(|()| ExitCode::from(exit::OK)),
         Command::Wait {
             file,
             timeout,
@@ -173,15 +166,9 @@ pub fn run(args: Args, json: bool) -> ExitCode {
             thread,
             outcome,
             note,
-        } => {
-            let outcome = match outcome {
-                ReplyOutcome::Applied => Outcome::Applied,
-                ReplyOutcome::Declined => Outcome::Declined,
-            };
-            Client::find(&file, true)
-                .and_then(|client| client.reply(&thread, outcome, &note))
-                .map(|replied| emit(replied, json))
-        }
+        } => Client::find(&file, true)
+            .and_then(|client| client.reply(&thread, outcome, &note))
+            .map(|replied| emit(replied, json)),
         Command::Next { file } => Client::find(&file, true)
             .and_then(|client| client.next())
             .map(|started| emit(started, json)),

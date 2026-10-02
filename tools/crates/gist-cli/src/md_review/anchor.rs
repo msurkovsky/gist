@@ -44,31 +44,25 @@ pub fn reanchor(anchor: &Anchor, old: &[Block], new: &[Block], version: u32) -> 
     Some(after_text.anchor_at(at, &anchor.quote, quote.len(), version))
 }
 
-/// A version's text with whitespace removed, the block each byte of it
-/// came from, and where each block starts in it.
+/// A version's text with whitespace removed, and where each block starts
+/// in it.
 struct Text<'a> {
     blocks: &'a [Block],
     key: String,
-    owner: Vec<usize>,
     starts: Vec<usize>,
 }
 
 impl<'a> Text<'a> {
     fn new(blocks: &'a [Block]) -> Self {
         let mut key = String::new();
-        let mut owner = Vec::new();
         let mut starts = Vec::new();
-        for (index, block) in blocks.iter().enumerate() {
+        for block in blocks {
             starts.push(key.len());
-            for c in block.text.chars().filter(|c| !c.is_whitespace()) {
-                key.push(c);
-                owner.resize(key.len(), index);
-            }
+            key.extend(block.text.chars().filter(|c| !c.is_whitespace()));
         }
         Self {
             blocks,
             key,
-            owner,
             starts,
         }
     }
@@ -89,13 +83,13 @@ impl<'a> Text<'a> {
     fn under(&self, needle: &str, headings: &[String]) -> Vec<usize> {
         self.find_all(needle)
             .into_iter()
-            .filter(|&at| self.blocks[self.owner[at]].headings == headings)
+            .filter(|&at| self.blocks[self.owner(at)].headings == headings)
             .collect()
     }
 
     fn anchor_at(&self, at: usize, quote: &str, len: usize, version: u32) -> Anchor {
-        let first = self.owner[at];
-        let last = self.owner[at + len - 1];
+        let first = self.owner(at);
+        let last = self.owner(at + len - 1);
         let prefix: String = {
             let mut chars: Vec<char> = self.key[..at].chars().rev().take(CONTEXT_CHARS).collect();
             chars.reverse();
@@ -115,6 +109,12 @@ impl<'a> Text<'a> {
                 end: self.point(last, at + len),
             }),
         }
+    }
+
+    /// The block byte `at` of the key came from: the last to start at or
+    /// before it, since an empty block starts where the next one does.
+    fn owner(&self, at: usize) -> usize {
+        self.starts.partition_point(|&start| start <= at) - 1
     }
 
     /// The point at byte `at` of the key, in `block`.

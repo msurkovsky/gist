@@ -58,7 +58,14 @@ impl Location {
             return Err(format!("not a file: {}", file.display()));
         }
         let parent = canonical.parent().unwrap_or(Path::new("/"));
-        let (root, git_dir) = root_for(parent, cwd)?;
+        let (root, git_dir) = match git_dirs(parent)? {
+            Some((top, common)) => (top, Some(common)),
+            None => (
+                std::fs::canonicalize(cwd)
+                    .map_err(|err| format!("could not resolve {}: {err}", cwd.display()))?,
+                None,
+            ),
+        };
         let relative = canonical.strip_prefix(&root).map_err(|_| {
             format!(
                 "{} is outside {}, where its review would be kept",
@@ -147,19 +154,6 @@ impl Location {
     }
 }
 
-/// The root that holds `.md-review/` for `dir`: the top level of its git
-/// work tree, or `cwd` outside one; with the git common directory.
-fn root_for(dir: &Path, cwd: &Path) -> Result<(PathBuf, Option<PathBuf>), String> {
-    match git_dirs(dir)? {
-        Some((top, common)) => Ok((top, Some(common))),
-        None => {
-            let cwd = std::fs::canonicalize(cwd)
-                .map_err(|err| format!("could not resolve {}: {err}", cwd.display()))?;
-            Ok((cwd, None))
-        }
-    }
-}
-
 /// The top level and the common git directory of the work tree holding
 /// `dir`, or `None` outside one or in a bare repository.
 fn git_dirs(dir: &Path) -> Result<Option<(PathBuf, PathBuf)>, String> {
@@ -223,6 +217,17 @@ pub struct ServerInfo {
     pub version: String,
 }
 
+/// The only address a server listens on.
+pub const LOOPBACK: &str = "127.0.0.1";
+
+impl ServerInfo {
+    /// `127.0.0.1:<port>`: where clients connect, and the only Host the
+    /// server accepts.
+    pub fn host(&self) -> String {
+        format!("{LOOPBACK}:{}", self.port)
+    }
+}
+
 /// Who wrote a message.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -246,6 +251,23 @@ pub enum Outcome {
     Applied,
     Declined,
     Answered,
+}
+
+/// What an agent's reply says it did; answering is for questions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, clap::ValueEnum)]
+#[serde(rename_all = "snake_case")]
+pub enum ReplyOutcome {
+    Applied,
+    Declined,
+}
+
+impl From<ReplyOutcome> for Outcome {
+    fn from(outcome: ReplyOutcome) -> Self {
+        match outcome {
+            ReplyOutcome::Applied => Outcome::Applied,
+            ReplyOutcome::Declined => Outcome::Declined,
+        }
+    }
 }
 
 impl Outcome {
@@ -694,7 +716,7 @@ impl Store {
 
     /// Append one event, flushed to disk before it is folded in, so state a
     /// client was told about survives a crash.
-    pub fn append(&mut self, event: Event) -> Result<&Review, String> {
+    pub fn append(&mut self, event: Event) -> Result<(), String> {
         let line = Line { at: now(), event };
         let mut text = serde_json::to_string(&line)
             .map_err(|err| format!("could not encode an event: {err}"))?;
@@ -704,7 +726,7 @@ impl Store {
             .and_then(|()| self.log.sync_data())
             .map_err(|err| format!("could not append to {LOG}: {err}"))?;
         self.review.apply(&line);
-        Ok(&self.review)
+        Ok(())
     }
 
     /// Snapshot version `number` as `v<number>.md` and return its hash.
@@ -854,9 +876,14 @@ fn exclude(git_dir: &Path) -> Result<(), String> {
 
 /// Seconds since the Unix epoch, 0 on a clock set before it.
 pub(super) fn now() -> u64 {
+    now_millis() / 1000
+}
+
+/// Milliseconds since the Unix epoch, 0 on a clock set before it.
+pub(super) fn now_millis() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |elapsed| elapsed.as_secs())
+        .map_or(0, |elapsed| elapsed.as_millis() as u64)
 }
 
 #[cfg(test)]
