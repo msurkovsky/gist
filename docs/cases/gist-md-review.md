@@ -272,3 +272,14 @@ What the reviewer reported:
 - No follow-up within a round: a reply to the agent's answer reaches it
   only with the next submit. That is the parked Live comments item in the
   HLD, kept for later.
+
+### Trial 2 — 2026-10-02, macOS, by hand
+
+The reviewer, Martin Surkovsky, repeated Trial 1 on macOS and reported it
+worked the same way as on Linux. macOS version, browser, host version,
+model and `gk` build were not recorded.
+
+- **host-loop: passed**, as in Trial 1.
+- **host-approved: passed**, as in Trial 1.
+- Not exercised: host-timeout-restart, host-redelivered,
+  host-comment-not-instruction, host-non-trigger.
