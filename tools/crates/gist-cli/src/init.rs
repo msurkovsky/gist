@@ -760,26 +760,35 @@ fn place(target: &Path, contents: &[u8], force: bool) -> Result<Status, String> 
 /// and the root's own path to cover `.claude` and `.claude/skills`, which a
 /// repo chooses; only the working directory is the user's.
 fn refuse_symlink(root: &Path, rel: &Path) -> Result<(), String> {
+    match symlink_under(root, rel)? {
+        Some(link) => Err(format!(
+            "{} is a symlink, and gk will not read or write through one — \
+             remove the link (scripts/link.sh makes them) and rerun",
+            link.display()
+        )),
+        None => Ok(()),
+    }
+}
+
+/// The first symlink among the components of `rel` under `root`, `root`
+/// itself unchecked. A missing component ends the walk: nothing below it
+/// exists to be a link.
+pub(crate) fn symlink_under(root: &Path, rel: &Path) -> Result<Option<PathBuf>, String> {
     let mut current = root.to_path_buf();
     for component in rel.components() {
         current.push(component);
         match std::fs::symlink_metadata(&current) {
-            Ok(meta) if meta.file_type().is_symlink() => {
-                return Err(format!(
-                    "{} is a symlink, and gk will not read or write through one — \
-                     remove the link (scripts/link.sh makes them) and rerun",
-                    current.display()
-                ))
-            }
+            Ok(meta) if meta.file_type().is_symlink() => return Ok(Some(current)),
             Ok(_) => {}
-            Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(None),
             Err(err) => return Err(format!("could not inspect {}: {err}", current.display())),
         }
     }
-    Ok(())
+    Ok(None)
 }
 
-fn hash(bytes: &[u8]) -> String {
+/// SHA-256 of `bytes`, lowercase hex.
+pub(crate) fn hash(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
 
@@ -831,7 +840,7 @@ fn write_manifest(root: &Path, entries: BTreeMap<ManifestPath, String>) -> Resul
         return Ok(());
     }
     let tmp = root.join(format!("{MANIFEST_FILENAME}.tmp"));
-    write_atomic(&path, &tmp, json.as_bytes(), false)
+    write_atomic(&path, &tmp, json.as_bytes(), Mode::Default)
 }
 
 /// The placing error is the one worth reporting. When the manifest could not
@@ -847,6 +856,17 @@ fn combine(placing: Result<(), String>, written: Result<(), String>) -> Result<(
     }
 }
 
+/// Permissions `write_atomic` gives the file it places.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Mode {
+    /// Whatever the umask leaves.
+    Default,
+    /// `0o755`, for a hook git runs.
+    Executable,
+    /// `0o600` from creation, for a file holding a secret.
+    Private,
+}
+
 /// Write `contents` to `path` through `tmp` and rename it into place, so a
 /// crash never leaves a truncated file and a symlink at `path` is replaced,
 /// not followed.
@@ -854,7 +874,7 @@ pub(crate) fn write_atomic(
     path: &Path,
     tmp: &Path,
     contents: &[u8],
-    executable: bool,
+    mode: Mode,
 ) -> Result<(), String> {
     // Leftover from a crashed run. `remove_file` drops a symlink itself,
     // never its target, and `create_new` below refuses to follow one.
@@ -863,13 +883,20 @@ pub(crate) fn write_atomic(
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
         Err(err) => return Err(format!("could not remove {}: {err}", tmp.display())),
     }
-    let written = std::fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    if mode == Mode::Private {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let written = options
         .open(tmp)
-        .and_then(|mut file| std::io::Write::write_all(&mut file, contents))
+        .and_then(|mut file| {
+            std::io::Write::write_all(&mut file, contents).and_then(|()| file.sync_data())
+        })
         .and_then(|()| {
-            if executable {
+            if mode == Mode::Executable {
                 make_executable(tmp)
             } else {
                 Ok(())

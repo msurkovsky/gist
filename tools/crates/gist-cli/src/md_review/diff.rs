@@ -5,6 +5,8 @@
 use serde::Serialize;
 use similar::{capture_diff_slices, Algorithm, DiffOp};
 
+use super::render::Block;
+
 /// What happened to one block of the new version.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(tag = "change", rename_all = "snake_case")]
@@ -46,6 +48,15 @@ impl BlockDiff {
                 .filter(|change| !matches!(change, Change::Unchanged { .. }))
                 .count()
     }
+}
+
+/// Diff two versions given as their rendered blocks.
+pub fn diff_blocks(old: &[Block], new: &[Block]) -> BlockDiff {
+    diff(&sources(old), &sources(new))
+}
+
+fn sources(blocks: &[Block]) -> Vec<&str> {
+    blocks.iter().map(|b| b.source.as_str()).collect()
 }
 
 /// Diff two versions given as their blocks' sources. A run of old blocks

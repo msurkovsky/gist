@@ -12,6 +12,7 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
@@ -19,15 +20,15 @@ use tokio::sync::Notify;
 
 use super::anchor::reanchor;
 use super::api::{
-    Approved, Delivery, Redelivered, Replied, Served, Started, State as ThreadState_, Status,
-    Stopped, SubmitStatus, Submitted, Tally, ThreadView,
+    Approved, Delivery, Redelivered, Replied, Served, Started, Status, Stopped, SubmitStatus,
+    Submitted, Tally, ThreadView,
 };
-use super::diff::{diff, BlockDiff, Change, Deleted};
+use super::diff::{diff_blocks, BlockDiff, Change, Deleted};
 use super::record;
 use super::render::{render, Block};
 use super::store::{
-    hash, record_path, Anchor, Approval, Author, Event, Kind, Location, Opened, Outcome, Review,
-    ServerInfo, Store, ThreadState,
+    hash, now, record_path, Anchor, Approval, Author, Event, Kind, Location, Opened, Outcome,
+    Review, ServerInfo, Store, ThreadState,
 };
 
 /// Longest a long-poll is held before it answers anyway.
@@ -177,7 +178,7 @@ pub fn detach(file: &Path, json: bool) -> Result<Detached, String> {
     // Pipes, not the caller's stdout and stderr: a host waits for those to
     // close before it returns.
     command
-        .args(["md-review", "serve", "--detached"])
+        .args(["md-review", "serve"])
         .arg(file)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -277,7 +278,7 @@ enum Finish {
 
 /// What every request shares.
 pub struct Server {
-    token: String,
+    /// `127.0.0.1:<port>`, the only Host a request may name.
     host: String,
     info: ServerInfo,
     state: Mutex<Live>,
@@ -292,8 +293,12 @@ struct Live {
     store: Store,
     /// Bumped on every change; the page long-polls for a different value.
     seq: u64,
-    /// Rendered versions, filled as they are needed; version `n` at `n - 1`.
-    rendered: Vec<Option<Arc<Vec<Block>>>>,
+    /// Rendered versions, filled as they are needed.
+    rendered: HashMap<u32, Arc<Vec<Block>>>,
+    /// Each thread's anchor as far as it has been carried, and whether a
+    /// round lost it. Anchors and versions never change, so the walk
+    /// resumes where it stopped instead of starting over per request.
+    carried: HashMap<String, (Anchor, bool)>,
     /// The current version's text, held so the record can be written even
     /// when the store can no longer be read safely.
     current: Vec<u8>,
@@ -306,7 +311,6 @@ impl Server {
     fn new(store: Store, info: &ServerInfo) -> Result<Self, String> {
         let current = store.read_version(store.review().version())?;
         Ok(Self {
-            token: info.token.clone(),
             host: format!("127.0.0.1:{}", info.port),
             info: info.clone(),
             state: Mutex::new(Live {
@@ -314,7 +318,8 @@ impl Server {
                 // A restarted server must not repeat a value an open page
                 // holds, or that page's poll would wait out its hold.
                 seq: now_millis(),
-                rendered: Vec::new(),
+                rendered: HashMap::new(),
+                carried: HashMap::new(),
                 current,
                 waiters: 0,
                 last_wait: None,
@@ -395,7 +400,7 @@ async fn guard(Shared_(shared): Shared_<Arc<Server>>, request: Request, next: Ne
                 .find_map(|pair| pair.strip_prefix("token="))
         })
     });
-    if !token.is_some_and(|token| same(token.as_bytes(), shared.token.as_bytes())) {
+    if !token.is_some_and(|token| same(token.as_bytes(), shared.info.token.as_bytes())) {
         return ApiError::new(StatusCode::UNAUTHORIZED, "missing or wrong token").into_response();
     }
     next.run(request).await
@@ -619,12 +624,7 @@ async fn post_message(
             (format!("t{}", review.opened + 1), Some(anchor))
         }
         (None, Some(thread)) => {
-            if !review.threads.iter().any(|t| t.id == thread) {
-                return Err(ApiError::new(
-                    StatusCode::NOT_FOUND,
-                    format!("no thread {thread}"),
-                ));
-            }
+            state.check_thread(&thread)?;
             (thread, None)
         }
         _ => {
@@ -704,12 +704,7 @@ async fn resolve(
 ) -> ApiResult<Done> {
     let mut state = shared.lock();
     state.check_current(at.round, at.version)?;
-    if !state.store.review().threads.iter().any(|t| t.id == id) {
-        return Err(ApiError::new(
-            StatusCode::NOT_FOUND,
-            format!("no thread {id}"),
-        ));
-    }
+    state.check_thread(&id)?;
     state.append(Event::ThreadResolved { thread: id })?;
     shared.changed.notify_waiters();
     Ok(Json(Done { seq: state.seq }))
@@ -786,38 +781,37 @@ async fn approve(
 ) -> ApiResult<ApprovedView> {
     let mut state = shared.lock();
     let review = state.store.review();
-    if let Some(approval) = review.approval.clone() {
-        if approval.round == body.round && approval.version == body.version {
-            let record = state.record(&approval)?;
-            let store_kept = state.store.removable().err();
-            return Ok(Json(ApprovedView { record, store_kept }));
+    match &review.approval {
+        // A repeat of the approval already made answers it again.
+        Some(approval) if approval.round == body.round && approval.version == body.version => {}
+        Some(approval) => return Err(ApiError::conflict(approved(approval))),
+        None => {
+            if body.round != review.round || body.version != review.version() {
+                return Err(ApiError::conflict(stale(review, body.round, body.version)));
+            }
+            // Only unsubmitted comments are pending; a submitted round is the
+            // agent's, not discarded.
+            let discarded = review
+                .threads
+                .iter()
+                .filter(|t| t.messages.iter().any(|m| review.is_pending(m)))
+                .map(|t| t.id.clone())
+                .collect();
+            let event = Event::Approved {
+                round: review.round,
+                version: review.version(),
+                hash: review.versions[review.versions.len() - 1].clone(),
+                note: body
+                    .note
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .map(str::to_string),
+                discarded,
+            };
+            state.append(event)?;
         }
-        return Err(ApiError::conflict(approved(&approval)));
     }
-    if body.round != review.round || body.version != review.version() {
-        return Err(ApiError::conflict(stale(review, body.round, body.version)));
-    }
-    // Only unsubmitted comments are pending; a submitted round is the
-    // agent's, not discarded.
-    let discarded = review
-        .threads
-        .iter()
-        .filter(|t| t.messages.iter().any(|m| review.is_pending(m)))
-        .map(|t| t.id.clone())
-        .collect();
-    let event = Event::Approved {
-        round: review.round,
-        version: review.version(),
-        hash: review.versions[review.versions.len() - 1].clone(),
-        note: body
-            .note
-            .as_deref()
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-            .map(str::to_string),
-        discarded,
-    };
-    state.append(event)?;
     let approval = state
         .store
         .review()
@@ -844,9 +838,12 @@ struct Presence(Arc<Server>);
 impl Presence {
     fn enter(shared: &Arc<Server>) -> Self {
         let mut state = shared.lock();
+        // `wait` reconnects every hold; only a change the page shows bumps
+        // `seq`, or every reconnect would wake and redraw every page.
+        let was_listening = state.listening();
         state.waiters += 1;
         state.last_wait = Some(now());
-        if state.waiters == 1 {
+        if !was_listening {
             state.seq += 1;
             drop(state);
             shared.changed.notify_waiters();
@@ -904,18 +901,7 @@ async fn reply(
     if body.outcome == Outcome::Answered {
         return Err(ApiError::bad("a reply is applied or declined"));
     }
-    if !state
-        .store
-        .review()
-        .threads
-        .iter()
-        .any(|t| t.id == body.thread)
-    {
-        return Err(ApiError::new(
-            StatusCode::NOT_FOUND,
-            format!("no thread {} in {}", body.thread, shared.info.file),
-        ));
-    }
+    state.check_thread(&body.thread)?;
     let note = non_blank(&body.note, "a note")?;
     state.append(Event::MessagePosted {
         thread: body.thread.clone(),
@@ -1052,6 +1038,26 @@ impl Live {
         Ok(())
     }
 
+    /// A `wait` is held, or one ended within the grace that covers its
+    /// restart.
+    fn listening(&self) -> bool {
+        self.waiters > 0
+            || self
+                .last_wait
+                .is_some_and(|at| now().saturating_sub(at) < GRACE_SECS)
+    }
+
+    fn check_thread(&self, id: &str) -> Result<(), ApiError> {
+        let review = self.store.review();
+        if !review.threads.iter().any(|t| t.id == id) {
+            return Err(ApiError::new(
+                StatusCode::NOT_FOUND,
+                format!("no thread {id} in {}", review.file),
+            ));
+        }
+        Ok(())
+    }
+
     /// Refuse an edit or delete of anything but the reviewer's own message
     /// not yet submitted.
     fn check_pending(&self, id: &str) -> Result<(), ApiError> {
@@ -1086,54 +1092,45 @@ impl Live {
     }
 
     fn cache(&mut self, version: u32, blocks: Vec<Block>) {
-        let index = version as usize - 1;
-        if self.rendered.len() <= index {
-            self.rendered.resize(index + 1, None);
-        }
-        self.rendered[index] = Some(Arc::new(blocks));
+        self.rendered.insert(version, Arc::new(blocks));
     }
 
     fn blocks(&mut self, version: u32) -> Result<Arc<Vec<Block>>, ApiError> {
-        let index = version as usize - 1;
-        if let Some(Some(blocks)) = self.rendered.get(index) {
+        if let Some(blocks) = self.rendered.get(&version) {
             return Ok(blocks.clone());
         }
         let bytes = self
             .store
             .read_version(version)
             .map_err(ApiError::internal)?;
-        let blocks =
-            render(&bytes).map_err(|err| ApiError::internal(format!("v{version}: {err}")))?;
-        self.cache(version, blocks);
-        Ok(self.rendered[index].clone().unwrap_or_default())
+        let blocks = Arc::new(
+            render(&bytes).map_err(|err| ApiError::internal(format!("v{version}: {err}")))?,
+        );
+        self.rendered.insert(version, blocks.clone());
+        Ok(blocks)
     }
 
     /// A thread with its anchor carried from the version it was made on to
     /// the current one, round by round; orphaned once a round loses it.
     fn thread_view(&mut self, thread: &super::store::Thread) -> Result<ThreadView, ApiError> {
         let current = self.store.review().version();
-        let mut anchor = thread.anchor.clone();
-        let mut orphaned = false;
-        while anchor.version < current {
+        let (mut anchor, mut orphaned) = match self.carried.get(&thread.id) {
+            Some(carried) => carried.clone(),
+            None => (thread.anchor.clone(), false),
+        };
+        while !orphaned && anchor.version < current {
             let old = self.blocks(anchor.version)?;
             let new = self.blocks(anchor.version + 1)?;
             match reanchor(&anchor, &old, &new, anchor.version + 1) {
                 Some(moved) => anchor = moved,
-                None => {
-                    orphaned = true;
-                    break;
-                }
+                None => orphaned = true,
             }
         }
-        let (state, applied_in) = match thread.state {
-            ThreadState::Open => (ThreadState_::Open, None),
-            ThreadState::Resolved => (ThreadState_::Resolved, None),
-            ThreadState::Applied(round) => (ThreadState_::Applied, Some(round)),
-        };
+        self.carried
+            .insert(thread.id.clone(), (anchor.clone(), orphaned));
         Ok(ThreadView {
             id: thread.id.clone(),
-            state,
-            applied_in,
+            state: thread.state,
             anchor,
             orphaned,
             messages: thread.messages.clone(),
@@ -1251,10 +1248,7 @@ impl Live {
     fn diff(&mut self, version: u32) -> Result<BlockDiff, ApiError> {
         let old = self.blocks(version - 1)?;
         let new = self.blocks(version)?;
-        Ok(diff(
-            &old.iter().map(|b| b.source.as_str()).collect::<Vec<_>>(),
-            &new.iter().map(|b| b.source.as_str()).collect::<Vec<_>>(),
-        ))
+        Ok(diff_blocks(&old, &new))
     }
 
     /// Block changes from the version before `version` to it, for the page.
@@ -1282,7 +1276,6 @@ impl Live {
                 .iter()
                 .map(|&deleted| DeletedBlock {
                     deleted,
-                    html: old[deleted.old].html.clone(),
                     source: old[deleted.old].source.clone(),
                 })
                 .collect(),
@@ -1320,10 +1313,7 @@ impl Live {
             threads: self.thread_views()?,
             summary: review.submit.as_ref().and_then(|s| s.summary.clone()),
             agent: AgentView {
-                listening: self.waiters > 0
-                    || self
-                        .last_wait
-                        .is_some_and(|at| now().saturating_sub(at) < GRACE_SECS),
+                listening: self.listening(),
                 last_wait: self.last_wait,
             },
             file_differs: self.file_differs(version),
@@ -1402,7 +1392,6 @@ struct BlockChange {
 struct DeletedBlock {
     #[serde(flatten)]
     deleted: Deleted,
-    html: String,
     source: String,
 }
 
@@ -1451,18 +1440,12 @@ fn now_millis() -> u64 {
         .map_or(0, |elapsed| elapsed.as_millis() as u64)
 }
 
-fn now() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |elapsed| elapsed.as_secs())
-}
-
 #[cfg(test)]
 mod tests {
+    use super::super::store;
     use super::*;
     use axum::body::Body;
     use serde_json::{json, Value};
-    use tempfile::TempDir;
     use tower::ServiceExt;
 
     const TOKEN: &str = "secret-token";
@@ -1470,38 +1453,15 @@ mod tests {
     const TEXT: &str = "# Top\n\nFirst paragraph here.\n";
 
     struct Fixture {
-        _dir: TempDir,
+        _repo: store::tests::Fixture,
         shared: Arc<Server>,
         log: std::path::PathBuf,
     }
 
     fn fixture() -> Fixture {
-        let dir = TempDir::new().unwrap();
-        let status = std::process::Command::new("git")
-            .args(["init", "-q"])
-            .current_dir(dir.path())
-            .env("GIT_CONFIG_GLOBAL", "/dev/null")
-            .env("GIT_CONFIG_NOSYSTEM", "1")
-            .status()
-            .unwrap();
-        assert!(status.success());
-        let path = dir.path().join("docs/foo.md");
-        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-        std::fs::write(&path, TEXT).unwrap();
-        let location = Location::find(&path).unwrap();
-        let mut opened = None;
-        // Another test thread spawning git may hold a copy of the lock's
-        // descriptor for a moment; see store's tests.
-        for _ in 0..100 {
-            match Store::open(&location, TEXT.as_bytes()).unwrap() {
-                Opened::Writer(store) => {
-                    opened = Some(*store);
-                    break;
-                }
-                Opened::Busy => std::thread::sleep(Duration::from_millis(10)),
-            }
-        }
-        let store = opened.expect("store still locked after a second");
+        let repo = store::tests::Fixture::git();
+        let location = repo.write("docs/foo.md", TEXT);
+        let store = store::tests::writer(&location);
         let info = ServerInfo {
             file: "docs/foo.md".to_string(),
             pid: 0,
@@ -1511,7 +1471,7 @@ mod tests {
         };
         Fixture {
             log: location.store_dir().join("events.jsonl"),
-            _dir: dir,
+            _repo: repo,
             shared: Arc::new(Server::new(store, &info).unwrap()),
         }
     }

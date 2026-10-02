@@ -12,7 +12,7 @@ use regex::Regex;
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 
-use crate::init::{write_atomic, Status, UninstallStatus};
+use crate::init::{write_atomic, Mode, Status, UninstallStatus};
 
 /// The git hooks gk provides. Each is installed as a shim that runs
 /// `gk hook <name>`, so each needs a `HookCommand` variant of the same name.
@@ -273,7 +273,7 @@ fn install(force: bool) -> Result<InstallReport, String> {
         let status = decide_install(&inspect(&path)?, name, &incoming, force);
         if matches!(status, Status::Installed | Status::Overwritten) {
             let tmp = dir.join(format!("{name}.gk-tmp"));
-            write_atomic(&path, &tmp, incoming.as_bytes(), true)?;
+            write_atomic(&path, &tmp, incoming.as_bytes(), Mode::Executable)?;
         }
         hooks.push(InstallItem {
             name: name.to_string(),
