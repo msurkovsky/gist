@@ -57,7 +57,9 @@ addition:
   command prints a timeout result in both renderings and exits `0`. The
   host kills a task that reaches its own limit and tells the agent not to
   restart it, so the command must end first; the caller then decides
-  whether to run it again.
+  whether to run it again. So is the end of what it waits on: `gk md-review wait`
+  reports a stopped server as a `stopped` result and exits `0`, so the
+  caller never branches on an error's wording.
 - **Restarting loses nothing.** State lives outside the process. A command
   killed, timed out or never started is safe to run again: a later `wait`
   returns what an earlier one missed, marked as a repeat when it was

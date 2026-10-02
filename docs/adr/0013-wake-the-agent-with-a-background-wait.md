@@ -60,8 +60,10 @@ The agent channel for slice 1 is the `gk` CLI, not MCP:
 - `gk md-review wait --timeout <dur>` returns a pending submit or approval
   at once, or blocks until one arrives, prints it, and exits 0. When the
   timeout fires first it prints a `timeout` event and exits 0; the skill
-  starts it again. It exits 1 at once when no server is running for the
-  file, or when the server's `gk` version differs from its own, naming
+  starts it again. When no server is running for the file, or the server
+  stops during the wait, it prints a `stopped` event and exits 0: like a
+  timeout, an outcome the skill reads without parsing a message. It exits
+  1 when the server's `gk` version differs from its own, naming
   `gk md-review stop`.
 - `reply`, `next`, `status` and `stop` return immediately like any other `gk`
   subcommand. After approval, `reply` and `next` exit 1 naming it.
@@ -137,7 +139,7 @@ button, blocking until clicked) showed:
   browser tab.
 
 The host case checks the same with the real `wait`, and that `wait` with no
-server exits 1 with a message naming `serve`.
+server reports it stopped, naming `serve`.
 End-to-end tests in `tools/crates/gist-cli/tests/md_review.rs` cover the exit
 codes and both renderings, and delivery: a `wait` started after the submit
 returns it; a delivered submit fetched again by a new `wait` is marked
@@ -150,6 +152,7 @@ with a test flag instead of sleeping.
 
 | When | Who | Why |
 |---|---|---|
+| 2026-10-02 21:55 | Martin Surkovsky | A stopped server is a `wait` outcome, not exit 1 |
 | 2026-10-01 22:28 | Martin Surkovsky | `serve` detaches instead of running as a background task, which the host would stop at its limit |
 | 2026-10-01 17:44 | Martin Surkovsky | The tool contract section now exists |
 | 2026-10-01 17:41 | Martin Surkovsky | Point to the case file by its skill name, as `gk check` requires |

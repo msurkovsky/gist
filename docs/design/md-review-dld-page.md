@@ -42,7 +42,7 @@ visible next to its context.
   | State | When | Shown as |
   |---|---|---|
   | agent listening | a `wait` polled within 90 s | green dot |
-  | agent revising | the agent has the submit and has not run `next` yet | green dot; it runs no `wait` meanwhile, so this is not away |
+  | agent revising | the agent has the submit and has not run `next` yet | green dot; it runs no `wait` meanwhile, so this is not away. It wins over listening, which the server still reports for 90 s after the `wait` that delivered the submit |
   | agent not listening yet | `serve` answers, and no `wait` has polled since it started | amber dot, with the request that resumes the review, as for away |
   | agent away | `serve` answers, no `wait` for 90 s or more, and no submit being revised | amber dot, "agent away since 14:02; your submit is kept", the request that resumes the review ("Continue the review of docs/foo.md with me.") with a copy button |
   | server offline | the page cannot reach `serve` | red dot, "reconnecting…" |
@@ -53,7 +53,7 @@ visible next to its context.
   old port when free, so an open tab finds it. The page cannot wake the
   agent; it can only say how.
 - **Banners.** Below the toolbar, one at a time, most severe first: write
-  refused because the page is stale (reload, drafts kept); the round is
+  refused because the page is stale (drafts kept); the round is
   submitted; working file differs from the version on screen. Drafts
   survive all of them.
 - **Revising banner.** From submit until the next round it says what the
@@ -126,7 +126,9 @@ UTF-8, and `serve` refuses such a file at start and `next` refuses it with
 In slice 1 a selection is made with the mouse; slice 2 adds the keyboard,
 which produces the same thing. Either way it is a DOM `Selection` over
 rendered text. From it the page builds the anchor of the HLD: `quote`,
-`prefix`, `suffix`, `blocks`, source `lines`, `headings`, `version`.
+`prefix`, `suffix`, `blocks`, source `lines`, `headings`, `version`, and
+the `span` the selection covers. The page draws a thread from its span and
+never searches the text for it.
 Building the anchor is a pure function in `anchor.js`, unit tested with
 `node --test`.
 
@@ -156,6 +158,9 @@ text and the server's may differ in whitespace and still agree:
    `headings` path in both the old and the new version.
 3. Otherwise the thread is **orphaned**: kept, shown at the top of the
    margin with the old quote, never silently dropped.
+
+An attached thread gets the quote's new `span`, so the page highlights the
+place the server matched, not another copy of the phrase.
 
 Orphaned is not logged; it is derived when the log is folded against the
 current version. Step 2 never guesses between copies of a phrase: a

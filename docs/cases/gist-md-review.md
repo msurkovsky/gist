@@ -62,18 +62,19 @@ URL, and a page left open reconnects and is answered at once.
 
 ### client-no-server
 
-`wait`, `reply`, `next` and `status` with no live server exit 1 with a
-message naming `serve`.
+`reply`, `next` and `status` with no live server exit 1 with a message
+naming `serve`. `wait` with no live server, or one that stops while it
+waits, prints a `stopped` event naming `serve` and exits 0.
 
 ### client-version-mismatch
 
 A client whose `gk` version differs from the one in `server.json` exits 1
 with a message naming `gk md-review stop`.
 
-### client-which-review
+### client-file-required
 
-Without `<file>`: with one live review the client uses it; with two it
-exits 1 and lists both. With `<file>` it uses that review.
+Every client takes `<file>`; without it the command line is refused with
+exit 2. A review started from another session never answers this one.
 
 ### client-token-and-host
 

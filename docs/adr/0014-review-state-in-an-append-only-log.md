@@ -85,7 +85,8 @@ until it exits; the OS releases it when the process dies. Within `serve`,
 one mutex covers each append and fold. The page and the CLI calls are HTTP
 clients on 127.0.0.1, authenticated by the token; the CLI finds the port
 and token in `server.json`. A CLI call with no live server exits 1 and
-names `serve`; it never writes the store itself. A CLI call whose `gk`
+names `serve`, except `wait`, which reports the server stopped; none
+writes the store itself. A CLI call whose `gk`
 version differs from the one in `server.json` exits 1 and names `stop`.
 
 **Resume.** A `serve` that cannot take the lock prints the live server's URL
@@ -140,8 +141,8 @@ page cannot post. Both fail loudly and `serve` resumes from the log.
 ## Verification
 
 Not built. Tests in `tools/crates/gist-cli/tests/md_review.rs`: state
-survives a server restart; a CLI call with no server exits 1 and writes
-nothing; two concurrent `serve` leave one writer, and the lock is free
+survives a server restart; a CLI call with no server exits 1, or for
+`wait` reports it stopped, and writes nothing; two concurrent `serve` leave one writer, and the lock is free
 again after the writer is killed; a stale `server.json` is replaced; a
 file whose flattened path matches another's gets its own store; a log with an
 unknown `format` is refused and its bytes are unchanged; a CLI call against
@@ -157,6 +158,7 @@ the entry once; a duplicated message id appears once in the folded state.
 
 | When | Who | Why |
 |---|---|---|
+| 2026-10-02 21:55 | Martin Surkovsky | `wait` reports a missing server as stopped instead of exiting 1 |
 | 2026-10-01 19:36 | Martin Surkovsky | Drop a line cut short by a crash; refuse a log of another file |
 | 2026-10-01 06:29 | Martin Surkovsky | Derive reopening on fold, as the HLD now settles |
 | 2026-09-30 22:10 | Martin Surkovsky | Apply the CEO review: store lock, format version, review record; key the store by a path hash |

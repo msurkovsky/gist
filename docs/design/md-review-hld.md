@@ -240,8 +240,8 @@ docs/foo.md · round 2 · 3 pending   [Show changes ✓]  [Submit review]  [Appr
   that resumes the review, to give the agent), or server offline. The page reconnects to `serve` by itself and keeps unsent drafts
   in browser storage until `serve` accepts them.
 - **Banners** say when the working file differs from the version on
-  screen, and when a write was refused because the page is stale (reload;
-  drafts are kept).
+  screen, and when a write was refused because the page is stale (the page
+  catches up by itself; drafts are kept).
 
 ## Flows
 
@@ -326,8 +326,9 @@ version so the round count stays honest.
 
 - **Stale writes.** Every write from the page carries its round and version;
   the server checks them under the log mutex. A write to a submitted round
-  or an old version gets 409, appends nothing, and the page keeps the draft
-  and asks for a reload. A repeated submit of a closed round is idempotent.
+  or an old version gets 409, appends nothing, and the page keeps the draft,
+  shows why and catches up by itself; a comment on an older version asks
+  the reviewer to select the text again. A repeated submit of a closed round is idempotent.
 - **Delivery.** A submit stays pending until `next`. `wait` started after
   the submit returns it at once, so a `wait` killed or never started loses
   nothing. `wait` long-polls in requests of about a minute and reconnects.
@@ -485,13 +486,18 @@ thread's resolution or its `applied` outcome reopens it on fold.
   "blocks": [12, 13],
   "lines": [41, 44],
   "headings": ["Loop", "Anchors"],
-  "version": 3
+  "version": 3,
+  "span": {"start": {"block": 12, "at": 4}, "end": {"block": 13, "at": 9}}
 }
 ```
 
 `lines` come from the renderer's source positions, so the agent can go
 straight to the source. `quote` + `prefix`/`suffix` relocate the anchor after
-small edits. `headings` gives the answerer the section without reading the
+small edits. `span` is where the quote is in `version`, in visible
+characters per block; the page draws the thread from it without searching,
+and the server records the new span when it moves the anchor. An anchor
+logged before spans were recorded has none, and the page marks its whole
+blocks. `headings` gives the answerer the section without reading the
 whole file.
 
 Re-anchoring runs on the server, against rendered text, not markdown
@@ -567,6 +573,11 @@ threads than `--limit` reports `truncated`, and the agent pages with
 `{"event": "timeout", "after": "110m"}` when `--timeout` expires with
 nothing pending; the skill starts `wait` again.
 
+`{"event": "stopped", "file": "docs/foo.md"}`, exit 0, when no server runs
+for the file or it stops during the wait; the skill starts no further
+wait. A stopped server is an outcome, like a timeout, so the agent never
+tells outcomes apart by an error's wording.
+
 Two additions, both omitted when they do not apply:
 
 - `redelivered`: the first delivery time and the threads already replied
@@ -588,7 +599,7 @@ A refusal answers `{"message": "…"}` and appends nothing.
 |---|---|---|
 | `GET /` | browser | the page, with a CSP that allows only `serve`, and `Referrer-Policy: no-referrer` since the URL holds the token |
 | `GET /assets/{name}` | browser | the page's scripts, styles, icon and the embedded `mermaid.min.js` |
-| `GET /api/review?after&hold` | page | everything the page draws: blocks, changes since the previous version, threads anchored to the current version, phase, agent presence, drift; at once when its `seq` differs from `after`, else after `hold` (at most 60 s) |
+| `GET /api/review?after&hold&have` | page | everything the page draws: blocks and changes since the previous version, left out when the page already holds that version (`have`), threads anchored to the current version, phase, agent presence, drift; at once when its `seq` differs from `after`, else after `hold` (at most 60 s) |
 | `POST /api/threads` | page | a comment: a new thread with an `anchor`, or a reply with a `thread`; the page picks the message id, so a retry appends nothing |
 | `PATCH`, `DELETE /api/messages/{id}` | page | edit or delete a pending comment |
 | `POST /api/threads/{id}/resolve` | page | resolve a thread |
@@ -609,19 +620,16 @@ unless a submitted round waits for them, and after approval.
 | Command | Does | Exit |
 |---|---|---|
 | `gk md-review serve <file> [--detach]` | starts or reuses the server, prints the URL; with `--detach` the server runs on its own and the command returns | runs until approval is delivered, or stop; with `--detach`, 0 once the URL is printed, else the server's exit code and message; 0 when reusing a live server; 1 on bind failure, unknown log format, file over 1 MiB or not UTF-8 |
-| `gk md-review wait [<file>] --timeout <dur> [--limit N]` | returns a pending submit or approval, or blocks until one or the timeout | 0 on event or timeout; 1 on no server or version mismatch |
-| `gk md-review reply [<file>] <thread> --outcome … --note …` | records the agent's answer to a thread | 0 / 1; 1 unless a submitted round waits, and after approval, naming it |
-| `gk md-review next [<file>]` | closes the round, snapshots the next version | 0 / 1; 1 unless a submitted round waits, after approval naming it, and on a file over 1 MiB or not UTF-8 |
-| `gk md-review status [<file>] [--round N] [--limit N] [--offset N]` | current round, open threads, waiters, undelivered submit; with `--round`, that round's submitted threads, paged by `--limit` and `--offset` | 0 / 1 |
-| `gk md-review stop [<file>]` | stops the server, keeps the store | 0 / 1 |
+| `gk md-review wait <file> --timeout <dur> [--limit N]` | returns a pending submit or approval, or blocks until one or the timeout; reports a server that is not running or stops | 0 on event, timeout or stopped server; 1 on version mismatch |
+| `gk md-review reply <file> <thread> --outcome … --note …` | records the agent's answer to a thread | 0 / 1; 1 unless a submitted round waits, and after approval, naming it |
+| `gk md-review next <file>` | closes the round, snapshots the next version | 0 / 1; 1 unless a submitted round waits, after approval naming it, and on a file over 1 MiB or not UTF-8 |
+| `gk md-review status <file> [--round N] [--limit N] [--offset N]` | current round, open threads, waiters, undelivered submit; with `--round`, that round's submitted threads, paged by `--limit` and `--offset` | 0 / 1 |
+| `gk md-review stop <file>` | stops the server, keeps the store | 0 / 1 |
 
 `--limit` caps the threads listed and defaults to 25. All take `--json`
 and follow the envelope in `docs/tool-contract.md`.
-Clients take the reviewed file. Without it, they use the one live review,
-found through the `file` in each `server.json`, or exit 1 listing the live
-ones when there are several. The skill always
-passes it, so a review started from another session never reaches this
-session's `wait`.
+Every client takes the reviewed file, so a review started from another
+session never reaches this session's `wait`.
 `serve` and `wait` block; the contract's "Long-running subcommands"
 section covers them.
 
