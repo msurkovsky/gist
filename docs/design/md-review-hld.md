@@ -3,9 +3,11 @@
 Detail lives in DLDs next to this file: the review page in
 [md-review-dld-page.md](md-review-dld-page.md).
 
-Status: draft, under review. Not built. A CEO review (2026-09-26, scope
-reduction) is applied; the eng review is next. Decisions that survive review
-move to ADRs; observable behavior moves to `docs/cases/gist-md-review.md`.
+Status: slice 1 built; first trial by hand on 2026-10-01, recorded in
+`docs/cases/gist-md-review.md`. A CEO review (2026-09-26, scope reduction) is
+applied; the steps in `TODO.md` replaced a full eng review. Decisions that
+survive review move to ADRs; observable behavior moves to
+`docs/cases/gist-md-review.md`.
 
 ## Problem
 
@@ -650,7 +652,7 @@ section covers them.
   `claude -p --resume <sid> --fork-session --model <m>` honours the model
   (verified on 2.1.283).
 
-## Proposed file arrangement
+## File arrangement
 
 ```
 docs/
@@ -664,7 +666,7 @@ docs/
     0014-review-state-in-an-append-only-log.md     # event log, one writer, store
     0015-md-review-http-stack.md   # axum, mermaid embedded, long-poll
   tool-contract.md                 # new section: long-running subcommands
-  architecture.md                  # one new row once md_review/ exists
+  architecture.md                  # one row for md_review/
 skills/
   gist-md-review/
     SKILL.md                       # drives the loop: serve, wait, edit, reply, next
@@ -673,8 +675,10 @@ skills/
 tools/crates/gist-cli/src/md_review/
   mod.rs                           # subcommands, argument parsing
   serve.rs                         # HTTP API, token and Host checks
+  api.rs                           # what serve answers the clients, Human and Serialize
   client.rs                        # wait/reply/next/status talking to serve
-  store.rs                         # event log, fold, lock, versions, server.json, record
+  store.rs                         # event log, fold, lock, versions, server.json
+  record.rs                        # review record written on approve
   render.rs                        # comrak with sourcepos, block plain text, heading paths
   diff.rs                          # block diff between versions
   anchor.rs                        # re-anchoring on rendered text
@@ -696,4 +700,3 @@ reduced to what the others do not cover.
 
 1. **Session id** for the Explain fork: how the agent or `gk` learns it.
    A hook sees it; the agent may not.
-2. **Store location** outside a git repository.

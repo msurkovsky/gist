@@ -1,8 +1,9 @@
 # Markdown review page — detailed design (DLD)
 
-Draft — 2026-09-26. Details the review page of the
-[high-level design](md-review-hld.md). Nothing here is built; the interaction is
-to be tried in a clickable mockup before this draft is settled. The CEO review
+2026-09-26, updated 2026-10-02. Details the review page of the
+[high-level design](md-review-hld.md). Slice 1 is built as described here and
+was tried by hand on 2026-10-01 instead of in a clickable mockup; see Trial 1
+in `docs/cases/gist-md-review.md`. The CEO review
 (2026-09-26) is applied: slice 1 is mouse only with block-level changes;
 [Keyboard](#keyboard) and word-level changes are slice 2.
 
