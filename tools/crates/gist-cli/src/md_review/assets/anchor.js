@@ -1,7 +1,8 @@
 // Selections to anchors, on the blocks `serve` renders. An anchor's span
-// says where it is; the server moves it with the anchor between versions. Offsets count visible characters only: whitespace is skipped,
-// as the server's re-anchoring skips it (anchor.rs), so the page's text
-// and the server's may differ in whitespace and still agree.
+// says where it is; the server moves it with the anchor between versions.
+// Offsets count visible characters only: whitespace is skipped, as the
+// server's re-anchoring skips it (anchor.rs), so the page's text and the
+// server's may differ in whitespace and still agree.
 // docs/design/md-review-dld-page.md#selection-and-anchors.
 
 /** Characters of context kept on each side of a quote, as anchor.rs keeps. */

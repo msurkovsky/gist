@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 
 use super::api::{Delivery, NotRunning, Replied, Started, Status, Stopped, Timeout};
 use super::serve::MAX_HOLD;
-use super::store::{Location, Outcome, ServerInfo};
+use super::store::{Location, ReplyOutcome, ServerInfo};
 
 /// How long a short call waits for its answer.
 const ANSWER: Duration = Duration::from_secs(30);
@@ -124,7 +124,12 @@ impl Client {
         }
     }
 
-    pub fn reply(&self, thread: &str, outcome: Outcome, note: &str) -> Result<Replied, String> {
+    pub fn reply(
+        &self,
+        thread: &str,
+        outcome: ReplyOutcome,
+        note: &str,
+    ) -> Result<Replied, String> {
         let body = serde_json::json!({ "thread": thread, "outcome": outcome, "note": note });
         self.data("POST", "/api/reply", Some(&body))
     }
@@ -177,10 +182,8 @@ impl Client {
 pub fn live_server(location: &Location) -> Result<ServerInfo, String> {
     let deadline = Instant::now() + STARTING;
     loop {
-        if let Some(info) = location.read_server()? {
-            if probe(&info) {
-                return Ok(info);
-            }
+        if let Some(info) = location.read_server()?.filter(probe) {
+            return Ok(info);
         }
         if Instant::now() >= deadline {
             return Err(format!(
@@ -214,7 +217,7 @@ fn send(
         .timeout_global(Some(timeout))
         .build()
         .into();
-    let address = format!("http://127.0.0.1:{}{path}", info.port);
+    let address = format!("http://{}{path}", info.host());
     let bearer = format!("Bearer {}", info.token);
     match (method, body) {
         ("GET", _) => agent.get(&address).header("Authorization", &bearer).call(),

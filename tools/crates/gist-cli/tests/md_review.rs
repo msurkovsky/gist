@@ -197,7 +197,7 @@ impl Server {
             "/api/submit",
             Some(json!({ "round": round, "summary": summary })),
         );
-        assert_eq!(status, 200, "{body}");
+        assert_eq!(status, 204, "{body}");
     }
 
     fn approve(&self, round: u32, note: &str) -> Value {

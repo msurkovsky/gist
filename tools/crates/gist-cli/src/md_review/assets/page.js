@@ -393,9 +393,13 @@ function drawDocument() {
 }
 
 function deletedStub(stub) {
-  const first = stub.source.split("\n").find((line) => line.trim()) ?? "";
-  const label = first.length > 60 ? first.slice(0, 60) + "…" : first;
-  return el("details", { class: "deleted" }, el("summary", {}, `deleted: ${label}`), el("pre", { class: "old" }, stub.source));
+  return el("details", { class: "deleted" }, el("summary", {}, `deleted: ${firstLine(stub.source, 60)}`), el("pre", { class: "old" }, stub.source));
+}
+
+/** The first non-blank line of `text`, cut to `max` characters. */
+function firstLine(text, max) {
+  const first = text.split("\n").find((line) => line.trim()) ?? "";
+  return first.length > max ? first.slice(0, max) + "…" : first;
 }
 
 function loadMermaid() {
@@ -443,10 +447,14 @@ function blockNode(index) {
   return $("document").querySelector(`:scope > .block[data-block="${index}"]`);
 }
 
+/** Whether the page's text of a block is the server's, so offsets in it agree. */
+function matchesServer(node) {
+  return visible(node.textContent) === visible(view.blocks[Number(node.dataset.block)].text);
+}
+
 /** Visible characters before `container`/`offset` in a block, or null when the page's text of the block is not the server's. */
 function offsetIn(node, container, offset) {
-  const index = Number(node.dataset.block);
-  if (visible(node.textContent) !== visible(view.blocks[index].text)) return null;
+  if (!matchesServer(node)) return null;
   const before = document.createRange();
   before.setStart(node, 0);
   before.setEnd(container, offset);
@@ -502,7 +510,7 @@ function onSelect() {
   }
   const message = newId();
   drafts[message] = { key: message, type: "thread", message, anchor, body: "", status: "editing" };
-  saveDrafts();
+  saveDraftsSoon();
   focused = message;
   openDrawer();
   drawMargin();
@@ -531,7 +539,7 @@ function measurePlaces() {
     if (blocks.length === 0) continue;
     const whole = !span || blocks.some((index) => {
       const node = blockNode(index);
-      return !node || selectsWhole(view.blocks[index].kind) || visible(node.textContent) !== visible(view.blocks[index].text);
+      return !node || selectsWhole(view.blocks[index].kind) || !matchesServer(node);
     });
     const place = { blocks, order: [blocks[0], span?.start.at ?? 0] };
     if (!whole) {
@@ -547,6 +555,11 @@ function measurePlaces() {
 function drawHighlights() {
   if (!view) return;
   measurePlaces();
+  paintHighlights();
+}
+
+/** Mark the places measured last, the focused one strongly. */
+function paintHighlights() {
   for (const node of $("document").querySelectorAll(".whole-anchor")) node.classList.remove("whole-anchor", "focused");
   const plain = [];
   const strong = [];
@@ -658,13 +671,12 @@ function threadCard(thread) {
   );
   if (closed && !expanded.has(thread.id) && focused !== thread.id && !reply) {
     card.classList.add("stub");
-    const first = thread.messages[0]?.body.split("\n")[0] ?? "";
     card.append(
       head,
       el(
         "div",
         { class: "row" },
-        el("span", { class: "muted" }, first.length > 50 ? first.slice(0, 50) + "…" : first),
+        el("span", { class: "muted" }, firstLine(thread.messages[0]?.body ?? "", 50)),
         el("button", { type: "button", class: "link", onclick: () => { expanded.add(thread.id); drawMargin(); } }, "Expand"),
       ),
     );
@@ -778,7 +790,8 @@ function setFocus(id) {
   if (focused === id) return;
   focused = id;
   for (const card of $("margin").querySelectorAll(".card")) card.classList.toggle("focused", card.dataset.id === id);
-  drawHighlights();
+  // Places change only with the document, threads or drafts, which redraw.
+  paintHighlights();
   layout();
 }
 
