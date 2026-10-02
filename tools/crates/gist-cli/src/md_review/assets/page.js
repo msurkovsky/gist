@@ -4,13 +4,15 @@
 // anchor.js and margin.js; this file is DOM wiring, covered by the host
 // case. docs/design/md-review-dld-page.md.
 
-import { anchorFor, locate, selectsWhole, visible } from "./anchor.js";
+import { anchorFor, selectsWhole, visible } from "./anchor.js";
 import { pack } from "./margin.js";
 
 /** Seconds the server may hold a poll; it holds at most 60. */
 const HOLD = 50;
 const BACKOFF_FIRST = 1000;
 const BACKOFF_LAST = 30000;
+/** Milliseconds of no typing before a draft is saved. */
+const SAVE_PAUSE = 300;
 const NARROW = matchMedia("(max-width: 1000px)");
 const ENDED = "The agent received the approval and the review server has ended. You can close this page.";
 
@@ -29,6 +31,7 @@ let hideResolved = false;
 const expanded = new Set();
 /** Unsent text by key, kept in browser storage until `serve` logs it. */
 let drafts = {};
+let saveTimer = null;
 /** Where each thread and draft sits in the document. */
 const places = new Map();
 let mermaid = null;
@@ -94,9 +97,11 @@ async function write(method, path, body) {
 async function poll() {
   let backoff = BACKOFF_FIRST;
   for (;;) {
-    const query = view ? `?after=${view.seq}&hold=${HOLD}` : "";
+    const query = view ? `?after=${view.seq}&hold=${HOLD}&have=${view.version}` : "";
     try {
       const next = await call("GET", `/api/review${query}`);
+      // The server leaves out the document of the version the page holds.
+      if (!next.blocks) Object.assign(next, { blocks: view.blocks, changes: view.changes });
       backoff = BACKOFF_FIRST;
       const wasOffline = offline;
       setOffline(false);
@@ -139,12 +144,24 @@ function loadDrafts() {
 }
 
 function saveDrafts() {
+  clearTimeout(saveTimer);
+  saveTimer = null;
   try {
     localStorage.setItem(storageKey(), JSON.stringify(drafts));
   } catch {
     // Storage is full or off; the drafts live as long as the tab.
   }
 }
+
+/** Save once typing pauses; a closing tab saves what is left. */
+function saveDraftsSoon() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(saveDrafts, SAVE_PAUSE);
+}
+
+addEventListener("pagehide", () => {
+  if (saveTimer) saveDrafts();
+});
 
 function newId() {
   const bytes = crypto.getRandomValues(new Uint8Array(8));
@@ -278,15 +295,16 @@ function drawConnection() {
     node.replaceChildren(dot, "server offline, reconnecting…");
     return;
   }
-  if (view.agent.listening) {
-    node.className = "connection listening";
-    node.replaceChildren(dot, "agent listening");
-    return;
-  }
-  // A revising agent runs no wait until the next round starts.
+  // A revising agent runs no wait until the next round starts; the server
+  // still counts it as listening for a grace after the delivering one.
   if (view.phase === "submitted" && view.delivered) {
     node.className = "connection listening";
     node.replaceChildren(dot, "agent revising");
+    return;
+  }
+  if (view.agent.listening) {
+    node.className = "connection listening";
+    node.replaceChildren(dot, "agent listening");
     return;
   }
   node.className = "connection away";
@@ -307,10 +325,7 @@ function drawBanner() {
   const banner = $("banner");
   if (stale) {
     banner.className = "banner stale";
-    banner.replaceChildren(
-      el("span", {}, stale),
-      el("button", { type: "button", onclick: () => location.reload() }, "Reload"),
-    );
+    banner.replaceChildren(el("span", {}, stale));
     banner.hidden = false;
   } else if (view.phase === "submitted") {
     banner.className = "banner working";
@@ -504,19 +519,25 @@ function measurePlaces() {
       .map((draft) => [draft.key, draft.anchor]),
   ];
   for (const [id, anchor] of anchored) {
-    const found = locate(view.blocks, anchor);
-    if (!found) continue;
+    // The server sends each anchor's span in the current version; one
+    // logged before spans were recorded is marked by its whole blocks.
+    const span = anchor.span;
     const blocks = [];
-    for (let index = found.start.block; index <= found.end.block; index++) blocks.push(index);
-    const whole = blocks.some((index) => {
+    if (span) {
+      for (let index = span.start.block; index <= span.end.block; index++) blocks.push(index);
+    } else {
+      blocks.push(...anchor.blocks);
+    }
+    if (blocks.length === 0) continue;
+    const whole = !span || blocks.some((index) => {
       const node = blockNode(index);
       return !node || selectsWhole(view.blocks[index].kind) || visible(node.textContent) !== visible(view.blocks[index].text);
     });
-    const place = { blocks, order: [found.start.block, found.start.at] };
+    const place = { blocks, order: [blocks[0], span?.start.at ?? 0] };
     if (!whole) {
       const range = document.createRange();
-      range.setStart(...pointAt(blockNode(found.start.block), found.start.at, false));
-      range.setEnd(...pointAt(blockNode(found.end.block), found.end.at, true));
+      range.setStart(...pointAt(blockNode(span.start.block), span.start.at, false));
+      range.setEnd(...pointAt(blockNode(span.end.block), span.end.at, true));
       place.range = range;
     }
     places.set(id, place);
@@ -563,7 +584,7 @@ function textArea(draft, placeholder) {
   area.value = draft.body;
   area.addEventListener("input", () => {
     draft.body = area.value;
-    saveDrafts();
+    saveDraftsSoon();
   });
   area.addEventListener("keydown", (event) => {
     if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {

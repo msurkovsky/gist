@@ -214,6 +214,7 @@ mod tests {
                 lines: [3, 3],
                 headings: vec!["Top".to_string()],
                 version: 2,
+                span: None,
             },
             orphaned: false,
             messages: vec![Message {

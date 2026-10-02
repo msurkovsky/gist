@@ -12,6 +12,10 @@ use std::path::{Path, PathBuf};
 pub(crate) use crate::init::hash;
 use crate::init::{symlink_under, write_atomic, Mode};
 
+/// A file's modification time and length, to tell whether it changed
+/// without reading it.
+pub type Stamp = (std::time::SystemTime, u64);
+
 /// The log format this `gk` reads and writes; `review_started` records it.
 pub const FORMAT: u32 = 1;
 /// Largest working file `serve` accepts, so rendering, diffing and `wait`
@@ -79,50 +83,6 @@ impl Location {
         })
     }
 
-    /// Every review under the root of `cwd` that has a `server.json`, by
-    /// file path. Whether its server still runs is for the caller to ask.
-    pub fn with_servers(cwd: &Path) -> Result<Vec<(Self, ServerInfo)>, String> {
-        let (root, git_dir) = root_for(cwd, cwd)?;
-        let reviews = Path::new(DIR).join(REVIEWS);
-        refuse_symlink(&root, &reviews)?;
-        let entries = match std::fs::read_dir(root.join(&reviews)) {
-            Ok(entries) => entries,
-            Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
-            Err(err) => return Err(format!("could not list {}: {err}", reviews.display())),
-        };
-        let mut found = Vec::new();
-        for entry in entries {
-            let entry =
-                entry.map_err(|err| format!("could not list {}: {err}", reviews.display()))?;
-            let Some(key) = entry.file_name().to_str().map(str::to_string) else {
-                continue;
-            };
-            let probe = Self {
-                root: root.clone(),
-                file: String::new(),
-                key,
-                git_dir: git_dir.clone(),
-            };
-            let Ok(Some(info)) = probe.read_server() else {
-                continue;
-            };
-            // The key is derived from the path, so a server.json naming
-            // another file was not written by that review's server.
-            if key_for(&info.file) != probe.key {
-                continue;
-            }
-            found.push((
-                Self {
-                    file: info.file.clone(),
-                    ..probe
-                },
-                info,
-            ));
-        }
-        found.sort_by(|a, b| a.0.file.cmp(&b.0.file));
-        Ok(found)
-    }
-
     /// The reviewed file, relative to the root, `/`-separated.
     pub fn file(&self) -> &str {
         &self.file
@@ -166,6 +126,13 @@ impl Location {
         Ok(bytes)
     }
 
+    /// The working file's modification time and length, or `None` when it
+    /// cannot be read.
+    pub fn working_stamp(&self) -> Option<Stamp> {
+        let meta = std::fs::metadata(self.root.join(&self.file)).ok()?;
+        Some((meta.modified().ok()?, meta.len()))
+    }
+
     /// The live server's `server.json`, if one was written.
     pub fn read_server(&self) -> Result<Option<ServerInfo>, String> {
         let rel = self.store_rel().join(SERVER);
@@ -194,31 +161,27 @@ fn root_for(dir: &Path, cwd: &Path) -> Result<(PathBuf, Option<PathBuf>), String
 }
 
 /// The top level and the common git directory of the work tree holding
-/// `dir`, or `None` outside one. Asked of git itself, as `gk hook` does.
+/// `dir`, or `None` outside one or in a bare repository.
 fn git_dirs(dir: &Path) -> Result<Option<(PathBuf, PathBuf)>, String> {
-    let output = std::process::Command::new("git")
-        .args([
-            "rev-parse",
-            "--path-format=absolute",
-            "--show-toplevel",
-            "--git-common-dir",
-        ])
-        .current_dir(dir)
-        .output()
-        .map_err(|err| format!("could not run git: {err}"))?;
-    if !output.status.success() {
-        return Ok(None);
-    }
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let mut lines = stdout.lines();
-    match (lines.next(), lines.next()) {
-        (Some(top), Some(common)) => {
-            let top = std::fs::canonicalize(top)
-                .map_err(|err| format!("could not resolve {top}: {err}"))?;
-            Ok(Some((top, PathBuf::from(common))))
+    let repo = match git2::Repository::discover(dir) {
+        Ok(repo) => repo,
+        Err(err) if err.code() == git2::ErrorCode::NotFound => return Ok(None),
+        Err(err) => {
+            return Err(format!(
+                "could not open the git repository at {}: {}",
+                dir.display(),
+                err.message()
+            ))
         }
-        _ => Ok(None),
-    }
+    };
+    let Some(top) = repo.workdir() else {
+        return Ok(None);
+    };
+    let top = std::fs::canonicalize(top)
+        .map_err(|err| format!("could not resolve {}: {err}", top.display()))?;
+    let common = std::fs::canonicalize(repo.commondir())
+        .map_err(|err| format!("could not resolve {}: {err}", repo.commondir().display()))?;
+    Ok(Some((top, common)))
 }
 
 /// Hex, one path segment, derived from the path alone: an existing review
@@ -306,6 +269,26 @@ pub struct Anchor {
     pub lines: [u32; 2],
     pub headings: Vec<String>,
     pub version: u32,
+    /// Where the quote is in `version`; absent from anchors logged
+    /// before it was recorded, which the page marks by whole blocks.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub span: Option<Span>,
+}
+
+/// A quote's place in a version: its first character and the point after
+/// its last.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Span {
+    pub start: Point,
+    pub end: Point,
+}
+
+/// A point in a block, counted in visible characters: whitespace skipped,
+/// one per code point, as the page counts them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Point {
+    pub block: u32,
+    pub at: u32,
 }
 
 /// One entry of `events.jsonl`. Field names are a persisted format.
@@ -952,6 +935,7 @@ pub(crate) mod tests {
             lines: [1, 1],
             headings: vec![],
             version: 1,
+            span: None,
         }
     }
 
@@ -1229,28 +1213,6 @@ pub(crate) mod tests {
         let err = open(&location, b"a\n").unwrap_err();
         assert!(err.contains("symlink"), "{err}");
         assert_eq!(std::fs::read_dir(elsewhere.path()).unwrap().count(), 0);
-    }
-
-    // Case: docs/cases/gist-md-review.md#client-which-review
-    #[test]
-    fn a_server_json_naming_another_file_is_not_listed() {
-        let fixture = Fixture::git();
-        let foo = fixture.write("docs/foo.md", "a\n");
-        let bar = fixture.write("docs/bar.md", "b\n");
-        let info = |file: &str| ServerInfo {
-            file: file.to_string(),
-            pid: 1,
-            port: 4000,
-            token: "t".to_string(),
-            version: "v".to_string(),
-        };
-        writer(&foo).write_server(&info("docs/foo.md")).unwrap();
-        writer(&bar).write_server(&info("docs/foo.md")).unwrap();
-
-        let listed = Location::with_servers(fixture.dir.path()).unwrap();
-        let files: Vec<_> = listed.iter().map(|(l, _)| l.file()).collect();
-        assert_eq!(files, ["docs/foo.md"]);
-        assert_eq!(listed[0].0.store_dir(), foo.store_dir());
     }
 
     // Case: docs/cases/gist-md-review.md#approve-confined

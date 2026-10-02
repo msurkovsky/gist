@@ -1,5 +1,5 @@
-// Selections to anchors and anchors back to places, on the blocks `serve`
-// renders. Offsets count visible characters only: whitespace is skipped,
+// Selections to anchors, on the blocks `serve` renders. An anchor's span
+// says where it is; the server moves it with the anchor between versions. Offsets count visible characters only: whitespace is skipped,
 // as the server's re-anchoring skips it (anchor.rs), so the page's text
 // and the server's may differ in whitespace and still agree.
 // docs/design/md-review-dld-page.md#selection-and-anchors.
@@ -35,7 +35,9 @@ export function selectsWhole(kind) {
  * `at` is `null` at a block edge, or where the page's text of the block is
  * not the server's, so the point is not known: the block is taken whole.
  * `blocks` are the server's, with `kind`, `text`, `lines` and `headings`.
- * Returns `null` when the selection quotes nothing.
+ * The anchor's `span` is the selection in the same counting, so the page
+ * draws it without searching. Returns `null` when the selection quotes
+ * nothing.
  */
 export function anchorFor(blocks, start, end, version) {
   if (end.block < start.block || (end.block === start.block && (end.at ?? Infinity) < (start.at ?? 0))) {
@@ -85,6 +87,7 @@ export function anchorFor(blocks, start, end, version) {
     lines: [blocks[from.block].lines[0], blocks[to.block].lines[1]],
     headings: blocks[from.block].headings,
     version,
+    span: { start: { block: from.block, at: from.at }, end: { block: to.block, at: to.at } },
   };
 }
 
@@ -107,49 +110,4 @@ export function slice(text, from, to) {
     }
   }
   return points.slice(begin, finish).join("").trim();
-}
-
-/**
- * Where `anchor` is in `blocks`: `{start, end}`, each `{block, at}`, or
- * `null` when its quote is not there. Of several places, the one its
- * prefix and suffix fit wins, then the one in its first block.
- */
-export function locate(blocks, anchor) {
-  const quote = chars(anchor.quote);
-  if (quote.length === 0) return null;
-  const owner = [];
-  const starts = [];
-  const all = [];
-  blocks.forEach((block, index) => {
-    starts.push(all.length);
-    for (const c of chars(block.text)) {
-      all.push(c);
-      owner.push(index);
-    }
-  });
-  const matches = (part, at) => at >= 0 && part.every((c, offset) => all[at + offset] === c);
-  const found = [];
-  for (let at = 0; at + quote.length <= all.length; at++) {
-    if (matches(quote, at)) found.push(at);
-  }
-  if (found.length === 0) return null;
-  // Context cut short by the document's edge fits as far as it goes.
-  const prefix = chars(anchor.prefix);
-  const suffix = chars(anchor.suffix);
-  const fits = (at) => {
-    const before = prefix.slice(Math.max(0, prefix.length - at));
-    const after = suffix.slice(0, all.length - at - quote.length);
-    return matches(before, at - before.length) && matches(after, at + quote.length);
-  };
-  const home = anchor.blocks?.[0];
-  const at =
-    found.find((at) => fits(at) && owner[at] === home) ??
-    found.find(fits) ??
-    found.find((at) => owner[at] === home) ??
-    found[0];
-  const last = at + quote.length - 1;
-  return {
-    start: { block: owner[at], at: at - starts[owner[at]] },
-    end: { block: owner[last], at: last + 1 - starts[owner[last]] },
-  };
 }
