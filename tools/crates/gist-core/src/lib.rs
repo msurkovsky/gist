@@ -79,20 +79,23 @@ pub fn emit_line<T: Serialize + Human>(data: &T, json: bool) {
     let _ = stdout.flush();
 }
 
-/// Write an error to stderr and return the process exit code.
+/// Write an error to stderr and return the process exit code. A closed
+/// stderr, such as a detached server's once its caller returned, loses the
+/// message but not the exit code.
 pub fn fail(message: impl Into<String>, code: u8, json: bool) -> ExitCode {
+    use std::io::Write;
     let message = message.into();
-    if json {
+    let text = if json {
         let envelope: Envelope<()> = Envelope::Error { message };
         // Hand-rolled fallback: a serializer failure here must not mask the
         // original error, and it must still be parseable by the caller.
-        let text = serde_json::to_string_pretty(&envelope).unwrap_or_else(|_| {
+        serde_json::to_string_pretty(&envelope).unwrap_or_else(|_| {
             r#"{"status":"error","message":"unserializable error"}"#.to_string()
-        });
-        eprintln!("{text}");
+        })
     } else {
-        eprintln!("error: {message}");
-    }
+        format!("error: {message}")
+    };
+    let _ = writeln!(std::io::stderr(), "{text}");
     ExitCode::from(code)
 }
 

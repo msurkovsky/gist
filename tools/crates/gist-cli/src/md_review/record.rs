@@ -4,10 +4,10 @@
 //! working file has moved on, the approved text and the block diff to it.
 //! docs/design/md-review-hld.md#approve.
 
-use super::api::{utc, State, ThreadView};
-use super::diff::{diff, Change};
-use super::render::{render, Block};
-use super::store::{Approval, Author, Outcome};
+use super::api::{utc, ThreadView};
+use super::diff::{diff_blocks, Change};
+use super::render::render;
+use super::store::{Approval, Author, ThreadState};
 
 /// The record's file name: the reviewed path flattened for reading, and the
 /// approval time, which keeps names apart and finds the record again after
@@ -90,11 +90,10 @@ pub fn compose(input: &Input) -> String {
 
 fn section(thread: &ThreadView) -> String {
     let anchor = &thread.anchor;
-    let state = match (thread.state, thread.applied_in) {
-        (State::Applied, Some(round)) => format!("applied in round {round}"),
-        (State::Applied, None) => "applied".to_string(),
-        (State::Resolved, _) => "resolved".to_string(),
-        (State::Open, _) => "open".to_string(),
+    let state = match thread.state {
+        ThreadState::Applied(round) => format!("applied in round {round}"),
+        ThreadState::Resolved => "resolved".to_string(),
+        ThreadState::Open => "open".to_string(),
     };
     let mut place = format!(
         "lines {}–{} of v{}",
@@ -112,9 +111,7 @@ fn section(thread: &ThreadView) -> String {
         let who = match message.author {
             Author::Human => "Reviewer".to_string(),
             Author::Agent => match message.outcome {
-                Some(Outcome::Applied) => "Agent, applied".to_string(),
-                Some(Outcome::Declined) => "Agent, declined".to_string(),
-                Some(Outcome::Answered) => "Agent, answered".to_string(),
+                Some(outcome) => format!("Agent, {}", outcome.as_str()),
                 None => "Agent".to_string(),
             },
         };
@@ -133,12 +130,7 @@ fn changes(approved: &[u8], working: &[u8]) -> String {
             return format!("The working file could not be compared: {reason}.\n")
         }
     };
-    let sources = |blocks: &[Block]| blocks.iter().map(|b| b.source.clone()).collect::<Vec<_>>();
-    let (old_sources, new_sources) = (sources(&old), sources(&new));
-    let result = diff(
-        &old_sources.iter().map(String::as_str).collect::<Vec<_>>(),
-        &new_sources.iter().map(String::as_str).collect::<Vec<_>>(),
-    );
+    let result = diff_blocks(&old, &new);
     let mut out = String::new();
     for deleted in &result.deleted {
         let block = &old[deleted.old];
@@ -213,8 +205,7 @@ mod tests {
     fn thread() -> ThreadView {
         ThreadView {
             id: "t1".to_string(),
-            state: State::Applied,
-            applied_in: Some(1),
+            state: ThreadState::Applied(1),
             anchor: Anchor {
                 quote: "the quote".to_string(),
                 prefix: String::new(),

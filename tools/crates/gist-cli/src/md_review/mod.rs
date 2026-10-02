@@ -40,11 +40,6 @@ enum Command {
         /// Run the server in the background: print its URL and return
         #[arg(long)]
         detach: bool,
-
-        /// Run as the server `--detach` started, whose output nobody reads
-        /// once its URL is printed
-        #[arg(long, hide = true, conflicts_with = "detach")]
-        detached: bool,
     },
 
     /// Return the reviewer's submit or approval, waiting for one until the timeout
@@ -161,17 +156,8 @@ pub fn run(args: Args, json: bool) -> ExitCode {
             }
             Err(message) => Err(message),
         },
-        Command::Serve { file, detached, .. } => {
-            let mut announced = false;
-            let served = serve::run(&file, |served| {
-                emit_line(served, json);
-                announced = true;
-            });
-            match served {
-                // The caller has returned and closed its end of stderr.
-                Err(_) if detached && announced => Ok(ExitCode::from(exit::FAILURE)),
-                served => served.map(|()| ExitCode::from(exit::OK)),
-            }
+        Command::Serve { file, .. } => {
+            serve::run(&file, |served| emit_line(served, json)).map(|()| ExitCode::from(exit::OK))
         }
         Command::Wait {
             file,

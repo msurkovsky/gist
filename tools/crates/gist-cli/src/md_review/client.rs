@@ -24,11 +24,6 @@ pub struct Client {
     info: ServerInfo,
 }
 
-enum Answer<T> {
-    Data(T),
-    Nothing,
-}
-
 impl Client {
     /// The server for `file`, or for the one live review when no file is
     /// named. `stop` skips the version check, since it is the remedy for a
@@ -94,7 +89,7 @@ impl Client {
         path: &str,
         body: Option<&impl Serialize>,
         timeout: Duration,
-    ) -> Result<Answer<T>, String> {
+    ) -> Result<Option<T>, String> {
         let response = send(&self.info, method, path, body, timeout).map_err(|err| match err {
             ureq::Error::Timeout(_) => format!(
                 "the review server for {} did not answer within {}s",
@@ -130,9 +125,8 @@ impl Client {
             let hold = left.min(poll).min(MAX_HOLD).as_secs_f64().ceil() as u64;
             let path = format!("/api/wait?hold={hold}&limit={limit}");
             let timeout = Duration::from_secs(hold) + ANSWER;
-            match self.call::<Delivery>("GET", &path, None::<&()>, timeout)? {
-                Answer::Data(delivery) => return Ok(delivery),
-                Answer::Nothing => {}
+            if let Some(delivery) = self.call::<Delivery>("GET", &path, None::<&()>, timeout)? {
+                return Ok(delivery);
             }
         }
     }
@@ -169,13 +163,8 @@ impl Client {
         path: &str,
         body: Option<&impl Serialize>,
     ) -> Result<T, String> {
-        match self.call(method, path, body, ANSWER)? {
-            Answer::Data(data) => Ok(data),
-            Answer::Nothing => Err(format!(
-                "the review server for {} answered nothing",
-                self.file()
-            )),
-        }
+        self.call(method, path, body, ANSWER)?
+            .ok_or_else(|| format!("the review server for {} answered nothing", self.file()))
     }
 }
 
@@ -240,19 +229,15 @@ fn send(
 fn read<T: DeserializeOwned>(
     mut response: ureq::http::Response<ureq::Body>,
     file: &str,
-) -> Result<Answer<T>, String> {
+) -> Result<Option<T>, String> {
     let status = response.status();
     if status == ureq::http::StatusCode::NO_CONTENT {
-        return Ok(Answer::Nothing);
+        return Ok(None);
     }
     if status.is_success() {
-        return response
-            .body_mut()
-            .read_json()
-            .map(Answer::Data)
-            .map_err(|err| {
-                format!("the review server for {file} sent an unreadable answer: {err}")
-            });
+        return response.body_mut().read_json().map(Some).map_err(|err| {
+            format!("the review server for {file} sent an unreadable answer: {err}")
+        });
     }
     if status == ureq::http::StatusCode::SERVICE_UNAVAILABLE {
         return Err(format!(

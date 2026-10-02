@@ -12,6 +12,7 @@ const HOLD = 50;
 const BACKOFF_FIRST = 1000;
 const BACKOFF_LAST = 30000;
 const NARROW = matchMedia("(max-width: 1000px)");
+const ENDED = "The agent received the approval and the review server has ended. You can close this page.";
 
 const token = new URLSearchParams(location.search).get("token") ?? "";
 
@@ -228,7 +229,6 @@ function show(next) {
   stale = null;
   const showChanges = $("show-changes").checked;
   if (!drawn || drawn.version !== view.version || drawn.showChanges !== showChanges) drawDocument();
-  drawToolbar();
   drawBanner();
   drawMargin();
 }
@@ -770,33 +770,35 @@ function openDrawer() {
 function startReply(thread) {
   const key = `reply:${thread.id}`;
   drafts[key] ??= { key, type: "reply", thread: thread.id, message: newId(), body: "", status: "editing" };
-  saveDrafts();
   expanded.add(thread.id);
-  focused = thread.id;
-  drawMargin();
-  document.querySelector(`[data-key="${CSS.escape(key)}"]`)?.focus();
+  openDraft(key, thread);
 }
 
 function startEdit(thread, message) {
   const key = `edit:${message.id}`;
   drafts[key] ??= { key, type: "edit", thread: thread.id, message: message.id, body: message.body, status: "editing" };
+  openDraft(key, thread);
+}
+
+function openDraft(key, thread) {
   saveDrafts();
   focused = thread.id;
   drawMargin();
   document.querySelector(`[data-key="${CSS.escape(key)}"]`)?.focus();
 }
 
-async function remove(message) {
-  try {
-    await write("DELETE", `/api/messages/${encodeURIComponent(message.id)}`, { round: view.round, version: view.version });
-  } catch {
-    // The banner or the connection indicator says why.
-  }
+function remove(message) {
+  return act("DELETE", `/api/messages/${encodeURIComponent(message.id)}`);
 }
 
-async function resolve(thread) {
+function resolve(thread) {
+  return act("POST", `/api/threads/${encodeURIComponent(thread.id)}/resolve`);
+}
+
+/** A write on the current round whose refusal the page already shows. */
+async function act(method, path) {
   try {
-    await write("POST", `/api/threads/${encodeURIComponent(thread.id)}/resolve`, { round: view.round, version: view.version });
+    await write(method, path, { round: view.round, version: view.version });
   } catch {
     // The banner or the connection indicator says why.
   }
@@ -893,7 +895,7 @@ async function confirmApprove() {
 function drawApproved(approval, gone) {
   const final = document.querySelector(".final");
   if (final) {
-    if (gone) final.querySelector(".status").textContent = "The agent received the approval and the review server has ended. You can close this page.";
+    if (gone) final.querySelector(".status").textContent = ENDED;
     return;
   }
   drafts = {};
@@ -906,7 +908,7 @@ function drawApproved(approval, gone) {
   $("connection").replaceChildren();
   $("resume").hidden = true;
   const status = gone
-    ? "The agent received the approval and the review server has ended. You can close this page."
+    ? ENDED
     : "The agent receives the approval the next time it waits; then the review server ends.";
   const screen = el(
     "section",

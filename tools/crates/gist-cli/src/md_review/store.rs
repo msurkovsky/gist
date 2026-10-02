@@ -4,11 +4,13 @@
 //! cases in docs/cases/gist-md-review.md.
 
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use std::collections::HashSet;
 use std::fs::{File, OpenOptions, TryLockError};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
+
+pub(crate) use crate::init::hash;
+use crate::init::{symlink_under, write_atomic, Mode};
 
 /// The log format this `gk` reads and writes; `review_started` records it.
 pub const FORMAT: u32 = 1;
@@ -223,8 +225,9 @@ fn git_dirs(dir: &Path) -> Result<Option<(PathBuf, PathBuf)>, String> {
 /// is found again, and no two paths share a store the way a flattened slug
 /// (`docs/foo.md`, `docs-foo.md`) would.
 fn key_for(file: &str) -> String {
-    let digest = format!("{:x}", Sha256::digest(file.as_bytes()));
-    digest[..KEY_HEX_CHARS].to_string()
+    let mut key = hash(file.as_bytes());
+    key.truncate(KEY_HEX_CHARS);
+    key
 }
 
 /// Where the record `name` is written, relative to the root.
@@ -232,30 +235,16 @@ pub fn record_path(name: &str) -> String {
     format!("{DIR}/{RECORDS}/{name}")
 }
 
-/// SHA-256 of a version's bytes, as recorded in the log.
-pub fn hash(bytes: &[u8]) -> String {
-    format!("{:x}", Sha256::digest(bytes))
-}
-
 /// Refuse a symlink at any component of `rel` under `root`, since writing
 /// or deleting through one lands outside the store.
 fn refuse_symlink(root: &Path, rel: &Path) -> Result<(), String> {
-    let mut current = root.to_path_buf();
-    for component in rel.components() {
-        current.push(component);
-        match std::fs::symlink_metadata(&current) {
-            Ok(meta) if meta.file_type().is_symlink() => {
-                return Err(format!(
-                    "{} is a symlink, and gk will not keep a review through one",
-                    current.display()
-                ))
-            }
-            Ok(_) => {}
-            Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(()),
-            Err(err) => return Err(format!("could not inspect {}: {err}", current.display())),
-        }
+    match symlink_under(root, rel)? {
+        Some(link) => Err(format!(
+            "{} is a symlink, and gk will not keep a review through one",
+            link.display()
+        )),
+        None => Ok(()),
     }
-    Ok(())
 }
 
 /// Address and credentials of a running `serve`, read by its clients.
@@ -294,6 +283,17 @@ pub enum Outcome {
     Applied,
     Declined,
     Answered,
+}
+
+impl Outcome {
+    /// The name the log and the clients use.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Outcome::Applied => "applied",
+            Outcome::Declined => "declined",
+            Outcome::Answered => "answered",
+        }
+    }
 }
 
 /// Where a thread points in the rendered document; built by the page.
@@ -425,8 +425,10 @@ pub struct Thread {
     pub state: ThreadState,
 }
 
-/// Whether a thread still needs attention; derived on fold.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Whether a thread still needs attention; derived on fold. Sent to clients
+/// as `"state"`, with `"applied_in"` for an applied thread.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "state", content = "applied_in", rename_all = "snake_case")]
 pub enum ThreadState {
     Open,
     Resolved,
@@ -725,7 +727,7 @@ impl Store {
     /// Snapshot version `number` as `v<number>.md` and return its hash.
     pub fn write_version(&self, number: u32, bytes: &[u8]) -> Result<String, String> {
         let name = format!("v{number}.md");
-        self.write_file(&name, bytes, false)?;
+        self.write_file(&name, bytes, Mode::Default)?;
         Ok(hash(bytes))
     }
 
@@ -741,7 +743,7 @@ impl Store {
     pub fn write_server(&self, info: &ServerInfo) -> Result<(), String> {
         let bytes = serde_json::to_vec_pretty(info)
             .map_err(|err| format!("could not encode {SERVER}: {err}"))?;
-        self.write_file(SERVER, &bytes, true)
+        self.write_file(SERVER, &bytes, Mode::Private)
     }
 
     /// Write the review record `name` under `.md-review/records/`, outside
@@ -749,11 +751,11 @@ impl Store {
     /// root. An existing record of that name is kept: it was written for
     /// the same approval before a restart.
     pub fn write_record(&self, name: &str, bytes: &[u8]) -> Result<String, String> {
-        let rel = Path::new(DIR).join(RECORDS).join(name);
-        refuse_symlink(&self.location.root, &rel)?;
+        let rel = record_path(name);
+        refuse_symlink(&self.location.root, Path::new(&rel))?;
         let path = self.location.root.join(&rel);
         std::fs::create_dir_all(self.location.records_dir())
-            .map_err(|err| format!("could not create {}: {err}", rel.display()))?;
+            .map_err(|err| format!("could not create {rel}: {err}"))?;
         let written = OpenOptions::new()
             .write(true)
             .create_new(true)
@@ -762,9 +764,9 @@ impl Store {
         match written {
             Ok(()) => {}
             Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => {}
-            Err(err) => return Err(format!("could not write {}: {err}", rel.display())),
+            Err(err) => return Err(format!("could not write {rel}: {err}")),
         }
-        Ok(record_path(name))
+        Ok(rel)
     }
 
     /// Whether `remove` would delete the store, or why it would keep it.
@@ -785,28 +787,14 @@ impl Store {
     /// Replace `name` in the store through a temporary file and a rename,
     /// so a reader never sees half of it and a symlink there is replaced,
     /// not followed.
-    fn write_file(&self, name: &str, bytes: &[u8], private: bool) -> Result<(), String> {
+    fn write_file(&self, name: &str, bytes: &[u8], mode: Mode) -> Result<(), String> {
         let dir = self.location.store_dir();
-        let path = dir.join(name);
-        let tmp = dir.join(format!(".{name}.tmp"));
-        let _ = std::fs::remove_file(&tmp);
-        let mut options = OpenOptions::new();
-        options.write(true).create_new(true);
-        #[cfg(unix)]
-        if private {
-            use std::os::unix::fs::OpenOptionsExt;
-            options.mode(0o600);
-        }
-        #[cfg(not(unix))]
-        let _ = private;
-        let written = options
-            .open(&tmp)
-            .and_then(|mut file| file.write_all(bytes).and_then(|()| file.sync_data()))
-            .and_then(|()| std::fs::rename(&tmp, &path));
-        if written.is_err() {
-            let _ = std::fs::remove_file(&tmp);
-        }
-        written.map_err(|err| format!("could not write {}: {err}", path.display()))
+        write_atomic(
+            &dir.join(name),
+            &dir.join(format!(".{name}.tmp")),
+            bytes,
+            mode,
+        )
     }
 }
 
@@ -881,23 +869,24 @@ fn exclude(git_dir: &Path) -> Result<(), String> {
         .map_err(|err| format!("could not update {}: {err}", path.display()))
 }
 
-fn now() -> u64 {
+/// Seconds since the Unix epoch, 0 on a clock set before it.
+pub(super) fn now() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |elapsed| elapsed.as_secs())
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use tempfile::TempDir;
 
-    struct Fixture {
+    pub(crate) struct Fixture {
         dir: TempDir,
     }
 
     impl Fixture {
-        fn git() -> Self {
+        pub(crate) fn git() -> Self {
             let fixture = Self::plain();
             let status = std::process::Command::new("git")
                 .args(["init", "-q"])
@@ -920,7 +909,7 @@ mod tests {
             self.dir.path().join(rel)
         }
 
-        fn write(&self, rel: &str, text: &str) -> Location {
+        pub(crate) fn write(&self, rel: &str, text: &str) -> Location {
             let path = self.path(rel);
             std::fs::create_dir_all(path.parent().unwrap()).unwrap();
             std::fs::write(&path, text).unwrap();
@@ -946,7 +935,7 @@ mod tests {
         Ok(Opened::Busy)
     }
 
-    fn writer(location: &Location) -> Store {
+    pub(crate) fn writer(location: &Location) -> Store {
         let working = location.read_working().expect("read");
         match open(location, &working).expect("open") {
             Opened::Writer(store) => *store,

@@ -5,7 +5,7 @@
 use gist_core::Human;
 use serde::{Deserialize, Serialize};
 
-use super::store::{Anchor, Author, Kind, Message, Outcome};
+use super::store::{Anchor, Author, Kind, Message, Outcome, ThreadState};
 
 /// Longest quote the human rendering prints before cutting it; the JSON
 /// rendering keeps the whole anchor.
@@ -19,24 +19,14 @@ fn is_false(value: &bool) -> bool {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ThreadView {
     pub id: String,
-    pub state: State,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub applied_in: Option<u32>,
+    #[serde(flatten)]
+    pub state: ThreadState,
     /// Where the thread points in the current version; when orphaned, the
     /// last place it was found.
     pub anchor: Anchor,
     #[serde(default, skip_serializing_if = "is_false")]
     pub orphaned: bool,
     pub messages: Vec<Message>,
-}
-
-/// Whether a thread still needs attention.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum State {
-    Open,
-    Resolved,
-    Applied,
 }
 
 /// What `wait` returns.
@@ -263,12 +253,10 @@ impl Human for ThreadView {
         if !self.anchor.headings.is_empty() {
             header.push_str(&format!(" · {}", self.anchor.headings.join(" › ")));
         }
-        match (self.state, self.applied_in) {
-            (State::Applied, Some(round)) => {
-                header.push_str(&format!(" · applied in round {round}"))
-            }
-            (State::Resolved, _) => header.push_str(" · resolved"),
-            _ => {}
+        match self.state {
+            ThreadState::Applied(round) => header.push_str(&format!(" · applied in round {round}")),
+            ThreadState::Resolved => header.push_str(" · resolved"),
+            ThreadState::Open => {}
         }
         let mut out = format!("{header}\n");
         out.push_str(&indent(&cut(&self.anchor.quote), "  > "));
@@ -276,12 +264,7 @@ impl Human for ThreadView {
             match (message.author, message.outcome) {
                 (Author::Human, _) => out.push_str(&indent(&message.body, "  ")),
                 (Author::Agent, outcome) => {
-                    let label = match outcome {
-                        Some(Outcome::Applied) => "applied: ",
-                        Some(Outcome::Declined) => "declined: ",
-                        Some(Outcome::Answered) => "answered: ",
-                        None => "",
-                    };
+                    let label = outcome.map_or(String::new(), |o| format!("{}: ", o.as_str()));
                     out.push_str(&indent(&format!("{label}{}", message.body), "  ↳ "));
                 }
             }
@@ -337,12 +320,7 @@ impl Human for Timeout {
 
 impl Human for Replied {
     fn human(&self) -> String {
-        let outcome = match self.outcome {
-            Outcome::Applied => "applied",
-            Outcome::Declined => "declined",
-            Outcome::Answered => "answered",
-        };
-        format!("{} {outcome} · {}", self.thread, self.file)
+        format!("{} {} · {}", self.thread, self.outcome.as_str(), self.file)
     }
 }
 
@@ -501,8 +479,7 @@ mod tests {
     fn thread() -> ThreadView {
         ThreadView {
             id: "t7".to_string(),
-            state: State::Open,
-            applied_in: None,
+            state: ThreadState::Open,
             anchor: Anchor {
                 quote: "A comment stores the quoted text".to_string(),
                 prefix: String::new(),
@@ -525,6 +502,23 @@ mod tests {
         assert_eq!(utc(0), [1970, 1, 1, 0, 0, 0]);
         assert_eq!(utc(951_782_400), [2000, 2, 29, 0, 0, 0]);
         assert_eq!(utc(1_790_883_360), [2026, 10, 1, 19, 36, 0]);
+    }
+
+    #[test]
+    fn a_thread_state_is_sent_as_state_and_applied_in() {
+        let mut applied = thread();
+        applied.state = ThreadState::Applied(2);
+        let json = serde_json::to_value(&applied).expect("encode");
+        assert_eq!(json["state"], "applied");
+        assert_eq!(json["applied_in"], 2);
+        let back: ThreadView = serde_json::from_value(json).expect("decode");
+        assert_eq!(back.state, ThreadState::Applied(2));
+
+        let json = serde_json::to_value(thread()).expect("encode");
+        assert_eq!(json["state"], "open");
+        assert!(json.get("applied_in").is_none());
+        let back: ThreadView = serde_json::from_value(json).expect("decode");
+        assert_eq!(back.state, ThreadState::Open);
     }
 
     // Case: docs/cases/gist-md-review.md#wait-blocks
