@@ -37,12 +37,13 @@ visible next to its context.
 - **Toolbar.** Fixed at the top: file, round, pending count, Show changes,
   Submit review, Approve, the connection indicator. Behaviour of Submit and
   Approve as in the HLD. The vim mode indicator joins it in slice 2.
-- **Connection indicator.** Always visible, one of four states:
+- **Connection indicator.** Always visible, one of five states:
 
   | State | When | Shown as |
   |---|---|---|
   | agent listening | a `wait` polled within 90 s | green dot |
   | agent revising | the agent has the submit and has not run `next` yet | green dot; it runs no `wait` meanwhile, so this is not away |
+  | agent not listening yet | `serve` answers, and no `wait` has polled since it started | amber dot, with the request that resumes the review, as for away |
   | agent away | `serve` answers, no `wait` for 90 s or more, and no submit being revised | amber dot, "agent away since 14:02; your submit is kept", the request that resumes the review ("Continue the review of docs/foo.md with me.") with a copy button |
   | server offline | the page cannot reach `serve` | red dot, "reconnecting…" |
 
@@ -66,8 +67,9 @@ visible next to its context.
   thread's highlight is stronger.
 - **Margin.** Cards positioned at the vertical offset of their anchor. When
   two would overlap, the later one moves down and a connector line keeps it
-  tied to its text. The focused card may push others down, as in Google
-  Docs.
+  tied to its text. The focused card stays level with its text, as in
+  Google Docs: the cards above it move up, and down again only as far as
+  the margin's top requires.
 - **Overall comment.** Not a card: it lives in the Submit dialog.
 - **Narrow window** (below about 1000px). The margin collapses to a drawer
   opened from the toolbar; highlights stay in the text and open the drawer
@@ -92,6 +94,8 @@ A card is one thread: an anchor, the human's message, replies.
   A card saved while the server is offline stays in the buffer, marked
   "not saved yet", and is sent when the page reconnects; a 409 on resend
   keeps it as a draft, as for any stale write.
+- **Edit** changes a pending comment's body only. A comment cannot move
+  to another anchor; delete it and write it again on the new selection.
 - **Replies** start a new message in the same thread, `kind` comment or
   question, and are pending until the next submit like any comment.
 - **Reopen** opens a reply field; the reply reopens the thread. There is no
@@ -109,10 +113,13 @@ A card is one thread: an anchor, the human's message, replies.
 |---|---|
 | loading | the toolbar, and a placeholder where the document renders |
 | empty file | "nothing to review"; Approve available, Submit disabled |
-| render error | the error and the raw markdown; Approve and Submit available |
 | mermaid block fails | that block's source and the mermaid error; the rest renders |
 | no comments yet | a hint in the margin: "select text to comment" |
 | approved | a final screen naming the approved round and the record path; the server is gone after it |
+
+There is no render-error state: rendering fails only on a file that is not
+UTF-8, and `serve` refuses such a file at start and `next` refuses it with
+409, so the page never receives one.
 
 ## Selection and anchors
 
@@ -128,16 +135,21 @@ Building the anchor is a pure function in `anchor.js`, unit tested with
   selection maps to the blocks it touches and the union of their ranges.
   Blocks are the document's top-level elements: a list, table or block
   quote is one block.
-- **Non-text blocks.** A mermaid diagram, image or table can be selected
-  only as a whole block; its quote is the block's rendered text, so it
-  re-anchors like any other quote.
+- **Non-text blocks.** A mermaid diagram, table, raw HTML block or rule
+  can be selected only as a whole block; its quote is the block's text as
+  the server extracts it (a diagram's source, a table's cell text), so it
+  re-anchors like any other quote. An image is part of its paragraph and
+  quotes nothing alone, so it cannot be commented on; slice 2 takes an
+  image whole (HLD, Scope).
 
 ### Re-anchoring after a round
 
 The agent edits the file between rounds, so a thread's quote may move or
 vanish. On each round the server re-attaches every open thread. It matches
-against the new version's rendered plain text, block by block, after
-collapsing runs of whitespace, never against markdown source:
+against the new version's rendered plain text with all whitespace
+ignored, across block boundaries so a quote may span blocks, never
+against markdown source. The page counts offsets the same way, so its
+text and the server's may differ in whitespace and still agree:
 
 1. Exact `quote` with matching `prefix` and `suffix`.
 2. Exact `quote` alone, only when it occurs once under the same
@@ -165,9 +177,9 @@ Revisit after real reviews show how often it happens.
   "changed" marker and its old source on demand.
 - Slice 2 adds Word-style track changes inside a changed block: inserted
   words underlined in green, deleted words struck through in red.
-- An applied thread links to the change that applied it when the server can
-  tell (its anchor's lines overlap a changed block); otherwise it only says
-  "applied in round N".
+- An applied thread says "applied in round N". Slice 2 links it to the
+  change that applied it when the server can tell (its anchor's lines
+  overlap a block changed in that round).
 
 ## Keyboard
 
@@ -240,10 +252,10 @@ avoid.
 - Slice 2: `Selection.modify` with `line` may jump oddly around tables,
   code blocks and diagrams. The mockup must be tried in Chrome, Firefox and
   Safari.
-- Margin positioning with many threads near each other gets crowded. Google
-  Docs' answer (focused card pushes others) is the plan; judge in the
-  mockup. The packing is a pure function in `margin.js`, unit tested with
-  `node --test`.
+- Margin positioning with many threads near each other gets crowded.
+  Google Docs' answer (the focused card stays level, the others make
+  room) is built; judge it in real reviews. The packing is a pure function
+  in `margin.js`, unit tested with `node --test`.
 - Re-anchoring by exact quote orphans threads whose text the agent reworded
   slightly. Accepted for slice 1.
 
@@ -256,11 +268,7 @@ npm dependencies. The DOM glue is covered by the host case in
 
 ## Open questions
 
-1. Can a pending comment be moved to a new anchor, or only deleted and
-   rewritten? Editing changes the body only.
-2. Slice 2: should `j k` move by rendered line or by block? Rendered line is
+1. Slice 2: should `j k` move by rendered line or by block? Rendered line is
    vim-like; block is more predictable around diagrams.
-3. Colours for highlights and changes must stay readable in black on white
-   and for colour-blind readers; pick in the mockup.
-4. Does the mockup live in the repo (for example `docs/design/md-review-dld-page/`)
-   or only in a scratch directory until the design is settled?
+2. Colours for highlights and changes are set in `page.css`, light and
+   dark. Whether they stay readable for colour-blind readers is unchecked.
