@@ -49,7 +49,13 @@ deployment, so no full eng review; the steps below replace it, in order:
 3. ~~Write the tool contract section and the behavior cases.~~ Done
    2026-10-01: `docs/tool-contract.md` "Long-running subcommands" and
    `docs/cases/gist-md-review.md`, both approved.
-4. Implement, starting with the store, log and lock (ADR 0014).
+4. ~~Implement, starting with the store, log and lock (ADR 0014).~~ Done
+   2026-10-01: slice 1 built; first trial recorded in
+   `docs/cases/gist-md-review.md`.
+
+Fix from use: a mouse selection opens the comment draft at once. Keep
+the selection visible first and open the draft from an icon or button
+next to it, as Google Docs does.
 
 Slice 2, deferred by the review: vim key bindings; word-level track changes
 (slice 1 marks changed blocks); export and import of a review.
