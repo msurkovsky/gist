@@ -16,6 +16,12 @@ gk outline <path> --json
 Options: `--limit N` caps reported file types, `--all` includes gitignored files.
 If `gk` is unavailable or the command fails, report the missing prerequisite or
 error. Do not invent counts or install tools without an installation request.
+When `gk` is missing, give the user its install command:
+
+```bash
+cargo install --config net.git-fetch-with-cli=true \
+  --git ssh://git@github.com/msurkovsky/gist.git gist-cli
+```
 
 ## Reading the result
 
