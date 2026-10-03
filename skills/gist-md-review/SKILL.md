@@ -12,8 +12,13 @@ A background `wait` wakes you on each submit; between rounds you are idle.
 
 ## Prerequisites
 
-- `gk` on `PATH` (`gk --version`). If it is missing, say so and stop; do
-  not install it.
+- `gk` on `PATH` (`gk --version`). If it is missing, say so, give the user
+  this install command, and stop; do not run it yourself:
+
+  ```bash
+  cargo install --config net.git-fetch-with-cli=true \
+    --git ssh://git@github.com/msurkovsky/gist.git gist-cli
+  ```
 - A host that runs a command in the background and wakes you when it
   exits. Claude Code does: a Bash call with `run_in_background` and a
   `timeout` of 7200000 (120 minutes). Without one, say md-review needs

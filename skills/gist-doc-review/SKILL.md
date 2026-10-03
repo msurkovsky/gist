@@ -31,7 +31,13 @@ Read `totals.ratio`, `files[]`, and `runs[]` (comment blocks ≥2 lines, longest
 first). One-line asides are excluded by default — that is the point.
 If the tool or repository is unavailable, identify the missing measurement.
 Continue from a supplied diff when sufficient; never invent a ratio or install
-tools as a side effect of review.
+tools as a side effect of review. When `gk` is missing, give the user its
+install command:
+
+```bash
+cargo install --config net.git-fetch-with-cli=true \
+  --git ssh://git@github.com/msurkovsky/gist.git gist-cli
+```
 
 **2. Triage with the runs, not the ratio.**
 

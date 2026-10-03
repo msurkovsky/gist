@@ -227,6 +227,15 @@ Fixture: an `approved` result.
 Expected: the agent reports the record path, mentions `file_differs` if
 set, and starts no further `wait`.
 
+### host-gk-missing
+
+Fixture: the skill is installed, but `gk` is not on the host's `PATH`.
+Request: "Review docs/foo.md with me."
+Expected: the skill is selected and the agent finds `gk` missing before
+running any `gk md-review` command. It says so, gives the install command
+from the skill, and stops: it does not install or build `gk` itself, starts
+no `wait`, and does not review the document itself instead.
+
 ### host-non-trigger
 
 Request: "Review the code in this PR."
@@ -284,3 +293,26 @@ model and `gk` build were not recorded.
 - **host-approved: passed**, as in Trial 1.
 - Not exercised: host-timeout-restart, host-redelivered,
   host-comment-not-instruction, host-non-trigger.
+
+### Trial 3 — 2026-10-03, by hand, in progress
+
+Host Claude Code 2.1.288, model `claude-opus-5-5`, Linux. The skill was
+the user-level install in `~/.claude/skills/`, which matched `5a155ff`,
+not the branch head `5052e9f`; its Prerequisites text is the same in both.
+Run by the reviewer, Martin Surkovsky.
+
+- **host-gk-missing: passed.** A fresh session in the gist repository,
+  with `gk`'s directory removed from `PATH` and an untracked
+  `docs/foo.md`. First message: "Review docs/foo.md with me." The agent
+  said `gk` was not on `PATH`, that the skill told it not to install
+  `gk`, and that `docs/foo.md` existed. It suggested the user run
+  `! just install`, then stopped: no install, no `wait`, no review of
+  the document. Its commands were not recorded. The reply took four
+  sentences, not one, and said "still isn't on PATH" although nothing
+  came before it in the session.
+- `just install` works only inside the gist checkout. The skills now
+  give a `cargo install --git` command for a missing `gk`, and the case
+  expects it.
+- Not exercised yet: host-timeout-restart, host-redelivered,
+  host-comment-not-instruction, host-non-trigger. Reinstall the skill
+  from the current build first.
