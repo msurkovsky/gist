@@ -69,6 +69,9 @@ requirement correctness, or a skill's decision quality.
 6. Add cases and evaluation evidence under `docs/cases/`, using
    `docs/skill-contract.md`. Exercise trigger, non-trigger, and missing-prerequisite
    scenarios. Record which host was evaluated and what remains untested.
+   Before a host trial, run `just install`, then `gk init --claude --force` where
+   the host loads skills, and start a fresh session. `gk` embeds the skills when it
+   is built, so an old binary reinstalls old skills and reports them `unchanged`.
 7. Run `just ci`; it rebuilds the embedded skills for the tests. Install a new binary
    or project skills only when that installation is requested. Packaging tests use
    temporary directories and do not change a working project's setup.
