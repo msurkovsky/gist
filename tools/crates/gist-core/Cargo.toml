@@ -3,6 +3,7 @@ name = "gist-core"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
 description = "Shared plumbing for gist tools: output envelopes, exit codes."
 
 [dependencies]

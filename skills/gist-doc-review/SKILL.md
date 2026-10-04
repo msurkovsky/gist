@@ -35,8 +35,8 @@ tools as a side effect of review. When `gk` is missing, give the user its
 install command:
 
 ```bash
-cargo install --config net.git-fetch-with-cli=true \
-  --git ssh://git@github.com/msurkovsky/gist.git gist-cli
+curl --proto '=https' --tlsv1.2 -LsSf \
+  https://github.com/msurkovsky/gist/releases/latest/download/gist-cli-installer.sh | sh
 ```
 
 **2. Triage with the runs, not the ratio.**

@@ -19,8 +19,8 @@ error. Do not invent counts or install tools without an installation request.
 When `gk` is missing, give the user its install command:
 
 ```bash
-cargo install --config net.git-fetch-with-cli=true \
-  --git ssh://git@github.com/msurkovsky/gist.git gist-cli
+curl --proto '=https' --tlsv1.2 -LsSf \
+  https://github.com/msurkovsky/gist/releases/latest/download/gist-cli-installer.sh | sh
 ```
 
 ## Reading the result
