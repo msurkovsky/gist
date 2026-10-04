@@ -60,8 +60,9 @@ The same machinery gives consumers projections: `views/<consumer>/workspace.josh
 maps flat skill names onto paths of this repo and is cloned with
 `josh clone ':workspace=views/<consumer>'`, with `josh push` writing edits back.
 A view is the way to work on an `experimental/` tree's history from a project.
-To only use its skills there, `gk init --experimental=<package>` installs them
-without one (`docs/adr/0005`).
+To only try its skills there, a contributor's `gk`, built from a checkout,
+installs them without one through `gk init --experimental=<package>`
+(`docs/adr/0005`). Release binaries do not carry vendored skills.
 
 ## Consequences
 
@@ -87,6 +88,7 @@ unchanged upstream reports `up to date` and creates no commit.
 
 | When | Who | Why |
 |---|---|---|
+| 2026-10-04 21:23 | Martin Surkovsky | `gk init --experimental` is now contributor-only; release binaries leave vendored skills out |
 | 2026-09-25 21:50 | Martin Surkovsky | Attribute changes to the accountable human author |
 | 2026-09-25 21:38 | Martin Surkovsky | Exclude ignored local artifacts while still checking tracked vendor files |
 | 2026-09-25 21:15 | Martin Surkovsky | Check imported content across merges instead of relying on first-parent history |

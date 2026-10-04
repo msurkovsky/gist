@@ -29,7 +29,9 @@ jobs:
           workspaces: tools
       - run: cargo fmt --check
       - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo clippy --all-targets --no-default-features -- -D warnings
       - run: cargo test
+      - run: cargo test -p gist-cli --no-default-features
       - uses: actions/setup-node@v4
         with:
           node-version: 22

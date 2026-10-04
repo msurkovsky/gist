@@ -560,6 +560,7 @@ fn init_claude_human_output_lists_each_skill_and_file() {
 
 /// One skill name under `experimental/<package>/skills/`, so a test does not
 /// hard-code an upstream name that `just vendor update` may rename.
+#[cfg(feature = "experimental")]
 fn an_experimental_skill(package: &str) -> String {
     fn find(dir: &Path) -> Option<String> {
         let mut paths: Vec<_> = std::fs::read_dir(dir)
@@ -590,6 +591,7 @@ fn an_experimental_skill(package: &str) -> String {
 /// directly) inside `experimental/<package>/skills/`, recursively — mirrors
 /// what `init --experimental` itself walks, ignoring stray files like a
 /// category's `README.md` that sit alongside skill dirs but aren't one.
+#[cfg(feature = "experimental")]
 fn experimental_skill_file_count(package: &str) -> u64 {
     fn walk(dir: &Path, n: &mut u64) {
         if dir.join("SKILL.md").is_file() {
@@ -622,6 +624,7 @@ fn experimental_skill_file_count(package: &str) -> u64 {
     n
 }
 
+#[cfg(feature = "experimental")]
 #[test]
 fn init_experimental_installs_a_vendored_package_prefixed() {
     let repo = Repo::new();
@@ -647,6 +650,7 @@ fn init_experimental_installs_a_vendored_package_prefixed() {
 }
 
 // Case: docs/cases/packaging.md#package-references
+#[cfg(feature = "experimental")]
 #[test]
 fn experimental_skill_dependencies_use_the_installed_namespace() {
     let repo = Repo::new();
@@ -676,6 +680,7 @@ fn experimental_skill_dependencies_use_the_installed_namespace() {
     }
 }
 
+#[cfg(feature = "experimental")]
 #[test]
 fn init_experimental_is_idempotent_on_a_second_run() {
     let repo = Repo::new();
@@ -690,6 +695,23 @@ fn init_experimental_is_idempotent_on_a_second_run() {
     assert_eq!(data["totals"]["conflicts"], 0);
 }
 
+/// Release binaries leave `experimental/` out (docs/adr/0005); only a
+/// contributor build from a checkout, `just install`, can install it.
+#[cfg(not(feature = "experimental"))]
+#[test]
+fn init_experimental_is_refused_by_a_release_build() {
+    let repo = Repo::new();
+    let (code, message) = repo.error(&["init", "--claude", "--experimental=mattpocock"]);
+
+    assert_eq!(code, 1, "expected refusal, not misuse");
+    assert!(message.contains("just install"), "got: {message}");
+    assert!(
+        !repo.path().join(".claude").exists(),
+        "a refused run writes nothing"
+    );
+}
+
+#[cfg(feature = "experimental")]
 #[test]
 fn init_experimental_unknown_package_names_what_is_available() {
     let repo = Repo::new();
@@ -700,6 +722,7 @@ fn init_experimental_unknown_package_names_what_is_available() {
     assert!(message.contains("mattpocock"), "got: {message}");
 }
 
+#[cfg(feature = "experimental")]
 #[test]
 fn init_claude_and_experimental_together_install_both() {
     let repo = Repo::new();
@@ -757,6 +780,7 @@ fn init_claude_and_codex_together_install_identical_content_into_both() {
     );
 }
 
+#[cfg(feature = "experimental")]
 #[test]
 fn init_codex_experimental_reuses_the_prefix_rewrite() {
     let repo = Repo::new();
@@ -1200,6 +1224,7 @@ fn a_conflict_on_rerun_still_protects_the_edited_file_on_uninstall() {
     assert_eq!(contents, "locally modified\n");
 }
 
+#[cfg(feature = "experimental")]
 #[test]
 fn rerunning_without_experimental_keeps_earlier_experimental_files_tracked() {
     let repo = Repo::new();
@@ -1308,6 +1333,7 @@ fn a_file_found_already_identical_is_recorded_and_later_uninstalled() {
     assert_eq!(data["totals"]["removed"], embedded_skill_file_count());
 }
 
+#[cfg(feature = "experimental")]
 #[test]
 fn init_experimental_repeated_flag_installs_the_package_once() {
     let repo = Repo::new();
@@ -1406,6 +1432,7 @@ fn init_claude_uninstall_human_output_lists_kept_files_and_the_force_hint() {
     assert!(!stdout.starts_with('{'));
 }
 
+#[cfg(feature = "experimental")]
 #[test]
 fn init_uninstall_with_experimental_is_a_refusal() {
     let repo = Repo::new();

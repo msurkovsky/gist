@@ -47,8 +47,9 @@ already names, and it would keep a layer alive for one caller.
 - Delete the four `gist-mr-*` skills, `gist-toolchain`, `languages/`, and
   `hooks/post-rebase-nag.sh`, whose only message was "run gist-toolchain".
 - Add `rules/merge-requests.md` with the constraints that survive.
-- Point to the vendored `mattpocock` skills for review (`code-review`), PR text
-  (`pr`), and rebase conflicts (`resolving-merge-conflicts`).
+- Point to Matt Pocock's skills, installed from upstream, for review
+  (`code-review`), PR text (`pr`), and rebase conflicts
+  (`resolving-merge-conflicts`).
 - Keep `gk hook commit-msg` and `mr.commitPattern`, which are repo-level. Drop
   `branch.<name>.mrType`: only `mr-start` ever set it.
 
@@ -64,5 +65,6 @@ but nothing holds a branch to one type any more.
 
 | When | Who | Why |
 |---|---|---|
+| 2026-10-04 21:23 | Martin Surkovsky | Point to installing the mattpocock skills from upstream, since release binaries no longer carry `--experimental` |
 | 2026-09-25 18:53 | Martin Surkovsky | Dropped the supersedes note on ADR 0009, which now states its current decision itself |
 | 2026-09-25 07:26 | Martin Surkovsky | Created |
