@@ -16,8 +16,8 @@ A background `wait` wakes you on each submit; between rounds you are idle.
   this install command, and stop; do not run it yourself:
 
   ```bash
-  cargo install --config net.git-fetch-with-cli=true \
-    --git ssh://git@github.com/msurkovsky/gist.git gist-cli
+  curl --proto '=https' --tlsv1.2 -LsSf \
+    https://github.com/msurkovsky/gist/releases/latest/download/gist-cli-installer.sh | sh
   ```
 - A host that runs a command in the background and wakes you when it
   exits. Claude Code does: a Bash call with `run_in_background` and a

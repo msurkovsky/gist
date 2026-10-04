@@ -6,6 +6,7 @@ members = ["crates/gist-core", "crates/gist-cli"]
 version = "0.2.0"
 edition = "2021"
 license = "MIT"
+repository = "https://github.com/msurkovsky/gist"
 
 [workspace.dependencies]
 gist-core = { path = "crates/gist-core" }
@@ -29,3 +30,8 @@ ureq = { version = "3", default-features = false, features = ["json"] }
 strip = true
 lto = true
 codegen-units = 1
+
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"

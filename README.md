@@ -56,7 +56,7 @@ MR, such as backup refs before a rewrite, reply format, and supersede order, are
 ## Build
 
 Needs a current stable Rust toolchain (including rustfmt and Clippy), a C compiler,
-Git, Bash, `just`, and Node.js 20 or later for the page tests. CI runs on Linux; macOS remains unverified. Josh is only
+Git, Bash, `just`, and Node.js 20 or later for the page tests. CI runs on Linux and macOS. Josh is only
 needed for importing vendors or using views. Repository checks need full Git
 history to resolve recorded imports.
 
@@ -67,11 +67,13 @@ just install   # put gk on PATH
 
 ## Use
 
-Without a clone, install `gk` with the command the skills give:
+Install `gk` with the command the skills give. It downloads a release binary
+for macOS or Linux, x86_64 or arm64, into `~/.cargo/bin`; no Rust toolchain
+is needed:
 
 ```bash
-cargo install --config net.git-fetch-with-cli=true \
-  --git ssh://git@github.com/msurkovsky/gist.git gist-cli
+curl --proto '=https' --tlsv1.2 -LsSf \
+  https://github.com/msurkovsky/gist/releases/latest/download/gist-cli-installer.sh | sh
 ```
 
 ```bash
