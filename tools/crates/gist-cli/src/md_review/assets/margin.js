@@ -1,5 +1,5 @@
 // Packing comment cards into the margin, level with their text.
-// docs/design/md-review-dld-page.md#layout.
+// docs/md-review-page.md#layout.
 
 /** Space between two cards, in pixels. */
 export const GAP = 8;

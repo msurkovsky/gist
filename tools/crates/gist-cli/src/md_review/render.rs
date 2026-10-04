@@ -2,7 +2,7 @@
 //! plain text for re-anchoring, its source for the block diff, its source
 //! lines and its heading path. Rendered markdown is untrusted: raw HTML is
 //! dropped, dangerous links are emptied, and images that would load from
-//! outside `serve` lose their source. docs/design/md-review-hld.md#anchor.
+//! outside `serve` lose their source. docs/md-review.md#anchor.
 
 use comrak::nodes::{AstNode, NodeValue};
 use comrak::{format_html, parse_document, Arena, Options};

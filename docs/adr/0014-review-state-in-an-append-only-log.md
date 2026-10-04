@@ -1,10 +1,10 @@
 # 14. Keep review state in an append-only log owned by the server
 
-Proposed — 2026-09-26.
+Accepted — 2026-09-26. Built and tried in Claude Code by 2026-10-04.
 
 ## Context
 
-A `gk md-review` session ([design](../design/md-review-hld.md)) holds comments,
+A `gk md-review` session ([design](../md-review.md)) holds comments,
 questions, agent replies, round boundaries, and a snapshot of the file per
 round. Three parties touch it: the browser page, the long-running `serve`
 process, and short-lived CLI calls from the agent (`wait`, `reply`, `next`).
@@ -50,7 +50,8 @@ user did not ask for.
 **Location.** `<repo root>/.md-review/reviews/<key>/`, the key a hash of the
 file's path relative to the root. `review_started` records the path.
 `serve` adds `.md-review/` to `.git/info/exclude`, never to the user's
-`.gitignore`. Outside a git repository: open, tracked in the design.
+`.gitignore`. Outside a git repository the root is the current directory,
+and a file outside it is refused.
 
 The key has to be derived from the path alone, so `serve` finds an existing
 review, and has to be one path segment, so deletion stays confined. A
@@ -98,10 +99,12 @@ this `gk` does not know is refused with exit 1 and left untouched.
 record, `.md-review/records/<name>-<time>.md`, outside `reviews/`: every
 round's threads, messages and outcomes, the approve note, and the approved
 version with its hash. `<name>` is the path flattened for reading; it is
-never looked up. When the working file differs from the approved version,
-the record says so and carries the approved text in full and the block
-diff to the working file, so deleting the store loses nothing that was
-approved. The store stays until a client has received the approval with
+never looked up. When the working file differs from the approved version at
+approve, the record says so and carries the approved text in full and the
+block diff to the working file, so deleting the store loses nothing that
+was approved. An edit made after approve, before the approval is
+delivered, is not caught: the record holds no approved text, and only
+git keeps it. The store stays until a client has received the approval with
 the record's path; then `serve` deletes `reviews/<key>/` and exits. The working file already
 holds the final text; git keeps whatever the user committed during the
 review. `stop` ends the server and keeps the directory, so the review can
@@ -140,7 +143,7 @@ page cannot post. Both fail loudly and `serve` resumes from the log.
 
 ## Verification
 
-Not built. Tests in `tools/crates/gist-cli/tests/md_review.rs`: state
+Tests in `tools/crates/gist-cli/tests/md_review.rs`: state
 survives a server restart; a CLI call with no server exits 1, or for
 `wait` reports it stopped, and writes nothing; two concurrent `serve` leave one writer, and the lock is free
 again after the writer is killed; a stale `server.json` is replaced; a
@@ -150,14 +153,16 @@ a different `gk` version exits 1; an edited or deleted pending message
 survives a restart as edited or gone; approve writes a complete record,
 even for more threads than `--limit`, and with the approved text when the
 working file differs, then removes the store directory and
-nothing outside it; a `stop` before the approval is delivered keeps the
-store; a symlinked store directory is refused; `.git/info/exclude` gains
-the entry once; a duplicated message id appears once in the folded state.
+nothing outside it; a symlinked store directory is refused;
+`.git/info/exclude` gains the entry once; a duplicated message id appears
+once in the folded state. Not tested: that a `stop` before the approval
+is delivered keeps the store.
 
 ## Changelog
 
 | When | Who | Why |
 |---|---|---|
+| 2026-10-04 09:47 | Martin Surkovsky | Accepted: built and tested; record an edit after approve as a known gap; settle the store outside git; mark the untested `stop` case |
 | 2026-10-02 21:55 | Martin Surkovsky | `wait` reports a missing server as stopped instead of exiting 1 |
 | 2026-10-01 19:36 | Martin Surkovsky | Drop a line cut short by a crash; refuse a log of another file |
 | 2026-10-01 06:29 | Martin Surkovsky | Derive reopening on fold, as the HLD now settles |

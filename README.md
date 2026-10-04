@@ -39,9 +39,10 @@ or behavioral evaluation.
 | `gist-doc-review` | the comments and doc strings in a change — cut what restates the code, shorten the bloated, add the missing line on public API |
 | `gist-md-review` | a markdown file you review yourself in a browser page, commenting on selections, while the agent revises it round by round until you approve. Claude Code only |
 
-All support implicit selection. Invoke explicitly with `/gist-outline` or
-`/gist-doc-review` in Claude Code, and `$gist-outline` or `$gist-doc-review` in
-Codex. Host evaluation status and acceptance scenarios live in `docs/cases/`.
+All support implicit selection. Invoke explicitly with `/gist-outline`,
+`/gist-doc-review` or `/gist-md-review` in Claude Code, and `$gist-outline` or
+`$gist-doc-review` in Codex. Host evaluation status and acceptance scenarios
+live in `docs/cases/`.
 
 For the rest of a change's life, use the vendored `mattpocock` skills, installed with
 `gk init --claude --experimental=mattpocock`: `/mattpocock-code-review` before opening an
@@ -65,6 +66,13 @@ just install   # put gk on PATH
 ```
 
 ## Use
+
+Without a clone, install `gk` with the command the skills give:
+
+```bash
+cargo install --config net.git-fetch-with-cli=true \
+  --git ssh://git@github.com/msurkovsky/gist.git gist-cli
+```
 
 ```bash
 gk outline .                       # what shape is this repo

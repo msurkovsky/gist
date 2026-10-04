@@ -1,11 +1,11 @@
 # 13. Wake the agent with a background `gk md-review wait`
 
-Proposed — 2026-09-26.
+Accepted — 2026-09-26. Built and tried in Claude Code by 2026-10-04.
 
 ## Context
 
 `gk md-review` lets a human review a rendered markdown file in the browser
-and submit all comments at once ([design](../design/md-review-hld.md)). When the
+and submit all comments at once ([design](../md-review.md)). When the
 human presses Submit, the agent is idle: its last turn ended with "here is the
 URL". Something has to put the review in front of it and start a turn.
 
@@ -75,7 +75,9 @@ the next `wait` returns what is pending. `wait` long-polls in requests of
 about a minute and reconnects, so no single HTTP request lasts for the
 whole review. A delivery after the first is marked with the first delivery
 time and the threads the agent already replied to; the skill re-reads the
-file and skips those threads, so a repeat does not apply an edit twice.
+file and skips those threads, so a repeat does not apply a replied edit
+twice. An edit made but not yet replied to is not in that list; nor is
+any reply when two `wait`s run at once (`TODO.md`).
 Exactly once was rejected: it needs the agent to acknowledge receipt, and a
 crash between receipt and acknowledgement loses the review silently.
 
@@ -127,7 +129,7 @@ makes that explicit rather than leaving the agent to guess.
 
 ## Verification
 
-Not built. A spike on 2026-10-01 in Claude Code (a Python page with a
+A spike on 2026-10-01 in Claude Code (a Python page with a
 button, blocking until clicked) showed:
 
 - a click wakes the agent with the output;
@@ -152,6 +154,7 @@ with a test flag instead of sleeping.
 
 | When | Who | Why |
 |---|---|---|
+| 2026-10-04 09:47 | Martin Surkovsky | Accepted: built, tested and tried in Claude Code; name the gaps a repeat leaves |
 | 2026-10-02 22:23 | Martin Surkovsky | Name the file in the `wait` command, which now requires it |
 | 2026-10-02 21:55 | Martin Surkovsky | A stopped server is a `wait` outcome, not exit 1 |
 | 2026-10-01 22:28 | Martin Surkovsky | `serve` detaches instead of running as a background task, which the host would stop at its limit |

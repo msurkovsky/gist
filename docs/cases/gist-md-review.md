@@ -2,8 +2,8 @@
 
 Problem: a human reviews a markdown file the agent wrote, in a rendered
 browser page, and the agent revises it round by round until the human
-approves. Design: [HLD](../design/md-review-hld.md),
-[page DLD](../design/md-review-dld-page.md), ADRs 0013–0015.
+approves. Design: [md-review.md](../md-review.md),
+[md-review-page.md](../md-review-page.md), ADRs 0013–0015.
 
 Tool cases run against `gk md-review` with a temporary repository and a
 short test poll interval. Page cases run as `node --test` on the pure
@@ -180,8 +180,8 @@ store was kept.
 ### page-anchor
 
 `anchor.js` turns a selection into quote, prefix, suffix, blocks, source
-lines and heading path; a selection over a mermaid diagram, image or table
-takes the whole block.
+lines and heading path; a selection over a mermaid diagram, table, raw
+HTML block or rule takes the whole block.
 
 ### page-margin
 
@@ -289,8 +289,8 @@ What the reviewer reported:
   round. Fixed on the page: a banner says whether the agent has the
   submit, since when it revises, and how many comments it answered.
 - No follow-up within a round: a reply to the agent's answer reaches it
-  only with the next submit. That is the parked Live comments item in the
-  HLD, kept for later.
+  only with the next submit. That is the parked Live comments item,
+  kept for later in `TODO.md`.
 
 ### Trial 2 — 2026-10-02, macOS, by hand
 

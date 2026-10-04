@@ -25,41 +25,34 @@
   they can run in production but have no tests. The earlier init review left
   that decision open; the rule has no carve-out.
 
-## In progress: browser review loop for markdown
+## Later: md-review, after first feedback
 
-Design under review in [docs/design/md-review-hld.md](docs/design/md-review-hld.md), with the
-review page detailed in
-[docs/design/md-review-dld-page.md](docs/design/md-review-dld-page.md):
-`gk md-review` and the `gist-md-review` skill, Claude Code first. Open
-questions are listed there; this entry leaves when the feature ships.
+The plan as it stood at merge is in git:
+`fd63c3d:docs/design/md-review-hld.md` and `md-review-dld-page.md` there,
+with the full designs of the items below.
 
-A CEO review (2026-09-26, scope reduction) settled decisions D2–D19; the
-HLD, the DLD and ADRs 0013 and 0014 carry them. Record, outside the repo:
-`~/.gstack/projects/msurkovsky-gist/ceo-plans/2026-09-26-md-review.md`.
-
-The CEO review covered architecture, errors, security, tests and
-deployment, so no full eng review; the steps below replace it, in order:
-
-1. ~~Validate the wake.~~ Done 2026-10-01 with a spike: a submit after
-   31 minutes woke the agent. The host kills a task at its limit and says
-   not to restart it, so `wait` now times out first (ADR 0013, HLD Settled).
-2. ~~Answer the open questions.~~ Done 2026-10-01: `axum`, long-poll
-   and embedded mermaid (ADR 0015); 1 MiB cap; quote unique in the old
-   version too; optional `<file>` on clients; a reply reopens a thread.
-3. ~~Write the tool contract section and the behavior cases.~~ Done
-   2026-10-01: `docs/tool-contract.md` "Long-running subcommands" and
-   `docs/cases/gist-md-review.md`, both approved.
-4. ~~Implement, starting with the store, log and lock (ADR 0014).~~ Done
-   2026-10-01: slice 1 built; first trial recorded in
-   `docs/cases/gist-md-review.md`.
-5. ~~Trial the current build.~~ Done 2026-10-04: Trial 3 in
-   `docs/cases/gist-md-review.md` passed every host case. Not yet
-   shown: that a redelivered round never applies an edit twice.
-6. Ship: get an independent review of the branch, merge, then move the HLD's lasting parts to
-   `architecture.md`, the cases and the ADRs, and drop this entry.
-
-Slice 2, deferred by the review: vim key bindings; word-level track changes
-(slice 1 marks changed blocks); export and import of a review.
+- Slice 2: vim key bindings (needs a mockup showing `Selection.modify`
+  behaves across browsers); word-level track changes in a changed block;
+  export and import of a review; finer blocks and block pairing by
+  content; images by repository path, and commenting on an image; a link
+  from an applied thread to its change.
+- Parked: Explain, a question answered by a read-only fork of the agent
+  session (open: how the agent learns its session id); Codex as a second
+  host; live comments delivered one by one.
+- Known gaps from the 2026-10-04 branch review, left until use shows they
+  matter:
+  - two `wait`s running at once both get a submit, the second marked
+    redelivered with no threads replied, so an agent acting on both edits
+    twice; a thread edited but not yet replied is invisible to a repeat;
+  - an edit after approve, before delivery, leaves the record without the
+    approved text;
+  - `stop` and `wait` on a moved or deleted file exit 1, leaving the
+    detached server to `kill`;
+  - Add comment keeps a stale anchor when the selection changes by
+    keyboard, and a drag released outside the document shows no button;
+  - a failed append can leave a torn line mid-log; deleting a reply that
+    reopened a thread leaves it open; `wait` output is bounded by thread
+    count only.
 
 ## Later: distribution and platform support
 

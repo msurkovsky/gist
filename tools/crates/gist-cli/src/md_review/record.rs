@@ -2,7 +2,7 @@
 //! approve, which outlives the store. Complete, not bounded: every thread with
 //! its messages and outcomes, the note, and the approved version; when the
 //! working file has moved on, the approved text and the block diff to it.
-//! docs/design/md-review-hld.md#approve.
+//! docs/md-review.md#approve.
 
 use super::api::{utc, ThreadView};
 use super::diff::{diff_blocks, Change};

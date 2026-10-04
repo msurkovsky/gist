@@ -7,7 +7,7 @@ with each line is in the skill.
 
 ```
 review submitted · docs/plan.md · round 2 · 3 threads
-redelivered · first 14:02 · replied t7
+redelivered · first 14:02 UTC · replied t7
 warning: docs/plan.md changed since round 2 was read; line numbers refer to v2
 
 summary
