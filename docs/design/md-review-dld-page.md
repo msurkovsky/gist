@@ -1,6 +1,6 @@
 # Markdown review page — detailed design (DLD)
 
-2026-09-26, updated 2026-10-02. Details the review page of the
+2026-09-26, updated 2026-10-04. Details the review page of the
 [high-level design](md-review-hld.md). Slice 1 is built as described here and
 was tried by hand on 2026-10-01 instead of in a clickable mockup; see Trial 1
 in `docs/cases/gist-md-review.md`. The CEO review
@@ -132,6 +132,15 @@ never searches the text for it.
 Building the anchor is a pure function in `anchor.js`, unit tested with
 `node --test`.
 
+- **Add comment.** When a selection that yields an anchor settles (mouse
+  up, or a shifted key), the page shows a small **Add comment** button just
+  below the selection's focus point, where the pointer let go, or above it
+  near the viewport's bottom. It is placed in the document, so it scrolls
+  with the text. The anchor is built then, not on click. Clicking opens a
+  draft card on that anchor and focuses it; an empty draft is replaced.
+  The button goes when the selection collapses, on `Esc`, or when the round
+  is not open. The page never clears the selection, and the browser's
+  context menu is left alone.
 - **Blocks and source lines.** The renderer tags each block element with
   its index and source line range (`data-block="12" data-lines="12-18"`). A
   selection maps to the blocks it touches and the union of their ranges.

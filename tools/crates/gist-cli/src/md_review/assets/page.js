@@ -15,6 +15,9 @@ const BACKOFF_LAST = 30000;
 const SAVE_PAUSE = 300;
 const NARROW = matchMedia("(max-width: 1000px)");
 const ENDED = "The agent received the approval and the review server has ended. You can close this page.";
+/** Pixels: the Add comment button's size, and its gap to the text. */
+const BUTTON_SIZE = 36;
+const BUTTON_GAP = 4;
 
 const token = new URLSearchParams(location.search).get("token") ?? "";
 
@@ -34,6 +37,8 @@ let drafts = {};
 let saveTimer = null;
 /** Where each thread and draft sits in the document. */
 const places = new Map();
+/** The anchor the Add comment button would comment on. */
+let offered = null;
 let mermaid = null;
 let diagrams = 0;
 
@@ -234,6 +239,7 @@ function show(next) {
     document.title = `${view.file} · review`;
   }
   reconcileDrafts();
+  if (view.phase !== "open") hideCommentButton();
   if (view.phase === "approved") {
     drawApproved(view.approval, false);
     return;
@@ -358,6 +364,8 @@ function drawDocument() {
   const doc = $("document");
   const showChanges = $("show-changes").checked;
   drawn = { version: view.version, showChanges };
+  // The selection the button was offered for is gone with the old nodes.
+  hideCommentButton();
   doc.classList.toggle("changes", showChanges && Boolean(view.changes));
   if (view.blocks.length === 0) {
     doc.replaceChildren(el("p", { class: "placeholder" }, "Nothing to review: the file is empty."));
@@ -500,10 +508,46 @@ function selectionAnchor() {
   return anchorFor(view.blocks, start, end, view.version);
 }
 
-function onSelect() {
-  if (!view || view.phase !== "open") return;
-  const anchor = selectionAnchor();
-  if (!anchor) return;
+/**
+ * Offer Add comment next to where a settled selection ended; the pointer's
+ * position when a mouse let go of it.
+ */
+function offerComment(pointerX) {
+  const selection = getSelection();
+  const anchor = view?.phase === "open" ? selectionAnchor() : null;
+  if (!anchor) {
+    hideCommentButton();
+    return;
+  }
+  // The anchor is fixed now, so clicking the button cannot move it.
+  offered = anchor;
+  const point = document.createRange();
+  point.setStart(selection.focusNode, selection.focusOffset);
+  let rect = point.getClientRects()[0];
+  if (!rect) {
+    // A point between elements has no box: use the selection's edge on
+    // the focus side.
+    const range = selection.getRangeAt(0);
+    const whole = range.getBoundingClientRect();
+    const backward = range.startContainer === selection.focusNode && range.startOffset === selection.focusOffset;
+    rect = backward ? { left: whole.left, top: whole.top, bottom: whole.top } : { left: whole.right, top: whole.bottom, bottom: whole.bottom };
+  }
+  const x = pointerX ?? rect.left;
+  let top = rect.bottom + BUTTON_GAP;
+  if (top + BUTTON_SIZE > innerHeight) top = rect.top - BUTTON_GAP - BUTTON_SIZE;
+  const left = Math.min(Math.max(x - BUTTON_SIZE / 2, BUTTON_GAP), document.documentElement.clientWidth - BUTTON_SIZE - BUTTON_GAP);
+  const button = $("add-comment");
+  button.style.top = `${top + scrollY}px`;
+  button.style.left = `${left + scrollX}px`;
+  button.hidden = false;
+}
+
+function hideCommentButton() {
+  offered = null;
+  $("add-comment").hidden = true;
+}
+
+function startComment(anchor) {
   // A new selection replaces an empty draft rather than piling them up.
   for (const draft of Object.values(drafts)) {
     if (draft.type === "thread" && !draft.body.trim()) delete drafts[draft.key];
@@ -963,9 +1007,27 @@ function drawApproved(approval, gone) {
 
 function wire() {
   const doc = $("document");
-  doc.addEventListener("mouseup", () => setTimeout(onSelect, 0));
+  doc.addEventListener("mousedown", hideCommentButton);
+  doc.addEventListener("mouseup", (event) => {
+    if (event.button === 0) setTimeout(() => offerComment(event.clientX), 0);
+  });
   doc.addEventListener("keyup", (event) => {
-    if (event.shiftKey) onSelect();
+    if (event.shiftKey) offerComment();
+  });
+  document.addEventListener("selectionchange", () => {
+    if (offered && getSelection().isCollapsed) hideCommentButton();
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && offered) hideCommentButton();
+  });
+  addEventListener("resize", hideCommentButton);
+  const add = $("add-comment");
+  // Keep the selection, and the focus, where they are until the click.
+  add.addEventListener("mousedown", (event) => event.preventDefault());
+  add.addEventListener("click", () => {
+    const anchor = offered;
+    hideCommentButton();
+    if (anchor && view?.phase === "open") startComment(anchor);
   });
   doc.addEventListener("click", (event) => {
     if (!getSelection().isCollapsed) return;

@@ -160,6 +160,23 @@ textarea {
 .mermaid-diagram { overflow-x: auto; }
 .mermaid-error { color: var(--off); font-size: 14px; }
 
+/* Placed in page coordinates by page.js, next to where a selection ended. */
+.add-comment {
+  position: absolute;
+  z-index: 5;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-fg);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+}
+.add-comment[hidden] { display: none; }
+
 ::highlight(threads) { background-color: var(--mark); }
 ::highlight(focused) { background-color: var(--mark-strong); }
 
