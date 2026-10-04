@@ -80,14 +80,19 @@ requirement correctness, or a skill's decision quality.
 
 1. Copy the whole skill directory into `skills/gist-<name>/`; the frontmatter `name` gets
    the prefix too.
-2. Add to its frontmatter:
+2. Copy the vendor's license file into `skills/gist-<name>/LICENSE`, and its `NOTICE`
+   file if it has one (Apache-2.0). The copy stays under
+   the upstream license, whatever this repo's is, and `gk init` installs the whole
+   directory, so the notice travels with every installed copy.
+3. Add to its frontmatter:
    ```yaml
    source: experimental/<vendor>/<path>@<upstream sha>
+   license: MIT, see LICENSE   # the upstream license
    ```
    The SHA is the `Upstream:` value in the last import commit, shown by `just vendor list`.
-3. Edit the copy. `experimental/` stays untouched. `scripts/vendor.sh check` finds
+4. Edit the copy. `experimental/` stays untouched. `scripts/vendor.sh check` finds
    violations.
-4. When the upstream changes later, diff `experimental/<vendor>/<path>` against the copy by
+5. When the upstream changes later, diff `experimental/<vendor>/<path>` against the copy by
    hand and port what you want. The `source:` line tells you where you started.
 
 ## Add or update a vendor
@@ -97,6 +102,10 @@ just vendor add <name> <git url> [branch]    # first import, full history
 just vendor update [name...]                 # re-import, clean merge, no duplicate commits
 just vendor list                             # registry with the imported upstream SHA
 ```
+
+Read the upstream license first. Vendor only a permissive one: MIT, BSD, ISC or
+Apache-2.0. Stop on anything else, including copyleft (GPL, AGPL, CC-BY-SA), a
+source-available license, or a repository with no license, which reserves all rights.
 
 Needs `josh-filter` on PATH (README, section Composition). The script commits for you:
 one `Register vendor <name>` commit, then one merge per import. Add the vendor to the
