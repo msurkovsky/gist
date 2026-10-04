@@ -76,6 +76,6 @@ Probe packaging when names, dependencies, or resource paths change. Probe
 `check.rs` when deciding what a green result means. These are manual review
 reminders; no risk-routing hook exists yet.
 
-CI validates on Linux. macOS behavior remains unverified. Automated coherence
-mapping, historical test-to-case backfill, and executable skill-resource modes
-are tracked in `TODO.md`; they are not claims made by the current checks.
+CI validates on Linux and macOS. Automated coherence mapping, historical
+test-to-case backfill, and executable skill-resource modes are tracked in
+`TODO.md`; they are not claims made by the current checks.

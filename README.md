@@ -182,6 +182,6 @@ Its `/setup-matt-pocock-skills` runs in a consuming project, not here.
 
 ## Status
 
-Early. Two skills, five command groups, one vendored upstream. Mechanical checks
+Early. Three skills, six command groups, one vendored upstream. Mechanical checks
 and behavior cases are in place; actual host evaluations and automated coherence
 review remain tracked work in `TODO.md`.

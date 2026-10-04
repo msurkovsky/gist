@@ -56,23 +56,17 @@ with the full designs of the items below.
 
 ## Later: distribution and platform support
 
-- Install `gk` without cloning the repo or a Rust toolchain, e.g. release
-  binaries. Then replace the `cargo install --git` command that
-  `gist-md-review`, `gist-outline` and `gist-doc-review` give for a missing
-  `gk`.
-
 - `gk init` currently installs skills only. Decide how reusable rules should be
   activated in consumer projects before offering installation of them.
 - Remove `hooks/commit-msg.sh` only when old symlink users have migrated to
   `gk hook install`. It remains a compatibility forwarder.
 - First Josh view: `views/claude/workspace.josh` for a consumer that needs one.
-- CI is Linux-only. Validate on macOS before claiming support, especially vendor
-  import/update behavior with Bash 3.2 and BSD tools, then consider a CI job.
+- CI runs `gk` on macOS, but not `scripts/vendor.sh`. Validate vendor
+  import/update with Bash 3.2 and BSD tools before claiming it works there.
 - Embedded file data does not retain executable modes. Before an owned skill
   depends on an executable helper, decide how installation preserves modes,
   includes resources outside `skills/`, and handles platform-specific binaries.
-  The existing experimental guardrail script is affected. Consider embedding
-  only vendor skill trees instead of entire experimental repositories.
+  The existing experimental guardrail script is affected.
 - Renamed and removed skills remain after a normal install rerun. An explicit
   uninstall/reinstall is the current migration path under
   [ADR 0007](docs/adr/0007-manifest-driven-uninstall.md). Revisit automatic
