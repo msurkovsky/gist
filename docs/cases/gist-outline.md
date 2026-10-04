@@ -36,8 +36,9 @@ present; a whole-tree survey does not help the specified edit.
 
 Request: "Summarize this directory using Gist."
 Fixture: `gk` is absent from PATH, or the supplied directory is missing.
-Expected: report the missing prerequisite or command error; do not invent counts
-or install tools implicitly.
+Expected: report the missing prerequisite or command error; when `gk` is
+missing, give the install command from the skill. Do not invent counts or
+install tools implicitly.
 
 ## Evidence and review
 

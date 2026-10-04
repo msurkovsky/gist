@@ -3,7 +3,7 @@
 //! check on every request; stale writes from the page get 409; the page and
 //! `wait` long-poll. Async stays in this module: the store, renderer and
 //! differ are synchronous and are called under one mutex.
-//! docs/design/md-review-hld.md; docs/adr/0015-md-review-http-stack.md.
+//! docs/md-review.md; docs/adr/0015-md-review-http-stack.md.
 
 use axum::extract::rejection::{JsonRejection, QueryRejection};
 use axum::extract::{

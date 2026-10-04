@@ -1,6 +1,6 @@
 //! What `serve` answers the agent's clients. The server builds these and a
 //! client prints them as received, so `wait`, `reply`, `next`, `status` and
-//! `stop` render the same data either way. docs/design/md-review-hld.md#what-wait-returns.
+//! `stop` render the same data either way. docs/md-review.md#what-wait-returns.
 
 use gist_core::Human;
 use serde::{Deserialize, Serialize};

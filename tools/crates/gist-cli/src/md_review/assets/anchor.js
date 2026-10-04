@@ -3,7 +3,7 @@
 // Offsets count visible characters only: whitespace is skipped, as the
 // server's re-anchoring skips it (anchor.rs), so the page's text and the
 // server's may differ in whitespace and still agree.
-// docs/design/md-review-dld-page.md#selection-and-anchors.
+// docs/md-review-page.md#selection-and-anchors.
 
 /** Characters of context kept on each side of a quote, as anchor.rs keeps. */
 export const CONTEXT_CHARS = 40;

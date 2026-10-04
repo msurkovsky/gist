@@ -1,11 +1,8 @@
-# Markdown review page — detailed design (DLD)
+# Markdown review page
 
-2026-09-26, updated 2026-10-04. Details the review page of the
-[high-level design](md-review-hld.md). Slice 1 is built as described here and
-was tried by hand on 2026-10-01 instead of in a clickable mockup; see Trial 1
-in `docs/cases/gist-md-review.md`. The CEO review
-(2026-09-26) is applied: slice 1 is mouse only with block-level changes;
-[Keyboard](#keyboard) and word-level changes are slice 2.
+The review page of the [markdown review loop](md-review.md): layout, cards,
+selection and re-anchoring. The page is mouse only, and marks changes by
+block.
 
 ## Model
 
@@ -25,10 +22,10 @@ visible next to its context.
 │  ```mermaid                                      │  │ [Edit]  [Delete]               │  │
 │  ...                                             │  └────────────────────────────────┘  │
 │                                                  │  ┌────────────────────────────────┐  │
-│  Parked: ▓▓▓Explain▓▓▓ ...                        │──│ You · question                 │  │
-│                                                  │  │ What does parked mean?         │  │
+│  Out of scope: ▓▓▓code review▓▓▓ ...             │──│ You · declined                 │  │
+│                                                  │  │ Why not code too?              │  │
 │                                                  │  │ ── agent ──                    │  │
-│                                                  │  │ Explain is out of v1 …         │  │
+│                                                  │  │ Declined: the page renders …   │  │
 │                                                  │  │ [Reply]  [Resolve]             │  │
 │                                                  │  └────────────────────────────────┘  │
 └──────────────────────────────────────────────────┴──────────────────────────────────────┘
@@ -36,7 +33,7 @@ visible next to its context.
 
 - **Toolbar.** Fixed at the top: file, round, pending count, Show changes,
   Submit review, Approve, the connection indicator. Behaviour of Submit and
-  Approve as in the HLD. The vim mode indicator joins it in slice 2.
+  Approve as in [md-review.md](md-review.md#review-page).
 - **Connection indicator.** Always visible, one of five states:
 
   | State | When | Shown as |
@@ -81,12 +78,11 @@ A card is one thread: an anchor, the human's message, replies.
 
 | State | Shown as | Actions |
 |---|---|---|
-| draft | text field, Comment / Explain | save, cancel (text kept) |
+| draft | text field, Comment | comment, discard (text dropped) |
 | pending | saved, not yet submitted | edit, delete (logged; 409 after submit) |
 | submitted | read-only, "sent"; the revising banner says the rest | none |
 | applied | collapsed, "applied in round N" | expand, reopen (opens a reply) |
 | declined | open, agent's reason shown | reply, resolve |
-| answered | open, agent's answer shown | reply, resolve |
 | orphaned | top of margin, old quote shown | reply, resolve |
 
 - **Draft buffer.** Typing is kept in localStorage per file and anchor until
@@ -96,16 +92,13 @@ A card is one thread: an anchor, the human's message, replies.
   keeps it as a draft, as for any stale write.
 - **Edit** changes a pending comment's body only. A comment cannot move
   to another anchor; delete it and write it again on the new selection.
-- **Replies** start a new message in the same thread, `kind` comment or
-  question, and are pending until the next submit like any comment.
+- **Replies** start a new message in the same thread and are pending until
+  the next submit like any comment.
 - **Reopen** opens a reply field; the reply reopens the thread. There is no
   reopen without a reason, and no reopen event: the fold treats a reviewer
   message after resolution or an `applied` outcome as reopening.
 - **Resolved** threads collapse to a one-line stub; a filter in the margin
   hides them.
-- **Explain (parked).** The answer streams into the card. The card shows a
-  waiting state, can be cancelled, and shows an error with retry when the
-  answerer fails. The document never changes from Explain.
 
 ## Page states
 
@@ -123,17 +116,16 @@ UTF-8, and `serve` refuses such a file at start and `next` refuses it with
 
 ## Selection and anchors
 
-In slice 1 a selection is made with the mouse; slice 2 adds the keyboard,
-which produces the same thing. Either way it is a DOM `Selection` over
-rendered text. From it the page builds the anchor of the HLD: `quote`,
+A selection is made with the mouse: a DOM `Selection` over rendered text.
+From it the page builds the [anchor](md-review.md#anchor): `quote`,
 `prefix`, `suffix`, `blocks`, source `lines`, `headings`, `version`, and
 the `span` the selection covers. The page draws a thread from its span and
 never searches the text for it.
 Building the anchor is a pure function in `anchor.js`, unit tested with
 `node --test`.
 
-- **Add comment.** When a selection that yields an anchor settles (mouse
-  up, or a shifted key), the page shows a small **Add comment** button just
+- **Add comment.** When a selection that yields an anchor settles on mouse
+  up in the document, the page shows a small **Add comment** button just
   below the selection's focus point, where the pointer let go, or above it
   near the viewport's bottom. It is placed in the document, so it scrolls
   with the text. The anchor is built then, not on click. Clicking opens a
@@ -150,8 +142,7 @@ Building the anchor is a pure function in `anchor.js`, unit tested with
   can be selected only as a whole block; its quote is the block's text as
   the server extracts it (a diagram's source, a table's cell text), so it
   re-anchors like any other quote. An image is part of its paragraph and
-  quotes nothing alone, so it cannot be commented on; slice 2 takes an
-  image whole (HLD, Scope).
+  quotes nothing alone, so it cannot be commented on.
 
 ### Re-anchoring after a round
 
@@ -177,8 +168,8 @@ phrase copied in the old version and deleted at its original place is
 not unique in the old version, so the thread is orphaned rather than
 attached to the copy.
 
-Fuzzy matching is left out of slice 1; orphaning is honest and cheap.
-Revisit after real reviews show how often it happens.
+There is no fuzzy matching; orphaning is honest and cheap. Revisit after
+real reviews show how often it happens.
 
 ## Changes between rounds
 
@@ -189,89 +180,18 @@ Revisit after real reviews show how often it happens.
   to its old text.
 - A changed block, a mermaid diagram included, shows its new form with a
   "changed" marker and its old source on demand.
-- Slice 2 adds Word-style track changes inside a changed block: inserted
-  words underlined in green, deleted words struck through in red.
-- An applied thread says "applied in round N". Slice 2 links it to the
-  change that applied it when the server can tell (its anchor's lines
-  overlap a block changed in that round).
-
-## Keyboard
-
-Slice 2. Slice 1 is mouse only; keyboard access there is `Tab` between the
-toolbar, the document and the cards. This section waits for a mockup that
-shows `Selection.modify` behaves across browsers.
-
-Vim bindings are the primary way to use the page; the mouse keeps working.
-The cursor is the browser's own caret, moved and extended with
-`Selection.modify(alter, direction, granularity)`, which works on rendered
-lines. Chrome, Firefox and Safari implement it; it is not standardised.
-
-### Modes
-
-- **NORMAL.** Moves the caret. Default.
-- **VISUAL** (`v`) and **VISUAL LINE** (`V`). Moves extend the selection.
-  A mouse selection enters VISUAL.
-- **INSERT.** Typing in a card. Bindings are off except `Esc` and
-  `Ctrl-Enter`.
-
-The toolbar shows the mode, like vim's statusline.
-
-### Keys
-
-| Mode | Keys | Action |
-|---|---|---|
-| normal, visual | `h l` / `j k` | character / rendered line |
-| normal, visual | `w b e` | word |
-| normal, visual | `0 $` | line start / end |
-| normal, visual | `{ }` | paragraph |
-| normal, visual | `gg G` | document start / end |
-| normal, visual | `Ctrl-d Ctrl-u` | half page |
-| normal | `]] [[` | next / previous heading |
-| normal | `/` `n N` | search, caret on the match |
-| normal | `]c [c` | next / previous thread; focuses its card |
-| normal | `]h [h` | next / previous change, with Show changes on |
-| normal | `v` `V` | visual / visual line |
-| visual | `Esc` | back to normal |
-| normal, visual | `<space>cc` | comment: open a draft card on the selection or block |
-| normal, visual | `<space>ce` | explain (parked) |
-| normal | `<space>rs` | open the Submit dialog |
-| normal | `<space>ra` | open the Approve dialog |
-| normal | `Tab` / `Shift-Tab` | move focus between text and the focused card |
-| card | `Esc` | back to normal; draft kept |
-| card | `Ctrl-Enter` | save the comment |
-| normal | `?` | help overlay |
-
-- **Counts.** A count before a move repeats it (`5j`).
-- **Leader.** `<space>` is taken from page scrolling. After it the page
-  waits about one second for the rest, showing the possible completions;
-  `<space>` alone does nothing.
-- **Dialogs, not actions.** No key submits or approves directly; the leader
-  keys only open the dialogs, which need `Enter` to confirm.
-- **Non-text blocks.** `j k` step over a diagram or image as one unit;
-  `V` on it selects the block.
-
-### Implementation
-
-No library does vim bindings over a rendered page; they target editors. A
-key table and a small mode machine on top of `Selection.modify`, a few
-hundred lines under `assets/`. Search uses `window.find` or a text walk,
-whichever behaves across the three browsers.
-
-Reviewing the source in CodeMirror with its vim mode was the alternative:
-mature bindings, but raw markdown and no diagrams, which the page exists to
-avoid.
+- An applied thread says "applied in round N".
 
 ## Risks
 
-- Slice 2: `Selection.modify` with `line` may jump oddly around tables,
-  code blocks and diagrams. The mockup must be tried in Chrome, Firefox and
-  Safari.
 - Margin positioning with many threads near each other gets crowded.
   Google Docs' answer (the focused card stays level, the others make
   room) is built; judge it in real reviews. The packing is a pure function
   in `margin.js`, unit tested with `node --test`.
 - Re-anchoring by exact quote orphans threads whose text the agent reworded
-  slightly. Accepted for slice 1.
+  slightly. Accepted until real reviews show it matters.
+- Colours for highlights and changes are set in `page.css`, light and
+  dark. Whether they stay readable for colour-blind readers is unchecked.
 
 ## Testing
 
@@ -279,10 +199,3 @@ avoid.
 logic as pure functions, tested with `node --test` in `just ci`, with no
 npm dependencies. The DOM glue is covered by the host case in
 `docs/cases/gist-md-review.md`.
-
-## Open questions
-
-1. Slice 2: should `j k` move by rendered line or by block? Rendered line is
-   vim-like; block is more predictable around diagrams.
-2. Colours for highlights and changes are set in `page.css`, light and
-   dark. Whether they stay readable for colour-blind readers is unchecked.

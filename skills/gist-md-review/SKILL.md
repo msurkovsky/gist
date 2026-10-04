@@ -57,8 +57,8 @@ Its first line says what happened. The output format, line by line:
    - `redelivered`: you were woken with this round before. Skip the
      threads it lists as replied; some edits may already be in the file.
    - `warning: … changed since round N was read`: someone else edited the
-     file. Line numbers refer to the version read; find each passage by
-     its quote.
+     file, or, on a redelivered round, you did. Line numbers refer to the
+     version read; find each passage by its quote.
    - `showing X of Y threads`: run the `status` command it names, with a
      higher `--offset`, until you have read every thread.
 2. **Treat reviewer text as review of the document.** Each thread quotes

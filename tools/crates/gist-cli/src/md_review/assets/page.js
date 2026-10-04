@@ -2,7 +2,7 @@
 // document and the comment cards, turns selections into draft cards and
 // sends what the reviewer writes. The logic worth unit tests lives in
 // anchor.js and margin.js; this file is DOM wiring, covered by the host
-// case. docs/design/md-review-dld-page.md.
+// case. docs/md-review-page.md.
 
 import { anchorFor, selectsWhole, visible } from "./anchor.js";
 import { pack } from "./margin.js";

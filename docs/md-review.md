@@ -1,13 +1,11 @@
-# Markdown review loop — high-level design (HLD)
+# Markdown review loop
 
-Detail lives in DLDs next to this file: the review page in
-[md-review-dld-page.md](md-review-dld-page.md).
-
-Status: slice 1 built; first trial by hand on 2026-10-01, recorded in
-`docs/cases/gist-md-review.md`. A CEO review (2026-09-26, scope reduction) is
-applied; the steps in `TODO.md` replaced a full eng review. Decisions that
-survive review move to ADRs; observable behavior moves to
-`docs/cases/gist-md-review.md`.
+`gk md-review` and the `gist-md-review` skill. The review page is detailed
+in [md-review-page.md](md-review-page.md); the decisions behind it are
+ADRs [0013](adr/0013-wake-the-agent-with-a-background-wait.md),
+[0014](adr/0014-review-state-in-an-append-only-log.md) and
+[0015](adr/0015-md-review-http-stack.md); observable behavior is in
+[the cases](cases/gist-md-review.md).
 
 ## Problem
 
@@ -19,8 +17,6 @@ and see the next version with its changes highlighted.
 
 ## Scope
 
-Slice 1, the first build:
-
 - One markdown file per review, rendered in a local browser page.
 - Comments on arbitrary mouse selections, as cards in a margin beside the
   text; the agent receives them only on submit.
@@ -31,41 +27,20 @@ Slice 1, the first build:
   review, keeps a review record, and drops the intermediate versions.
 - Host: Claude Code only.
 
-Slice 2, designed but deferred:
+Limits of what is built; `TODO.md` tracks what comes next:
 
-- **Vim key bindings** on the page, once a mockup shows `Selection.modify`
-  behaves across browsers.
-- **Word-level track changes** inside a changed block.
-- **Export and import.** The page downloads the review (document, threads,
-  unsent drafts) as a file; importing it resumes the review, through
-  `serve`, so `serve` stays the only writer. Covers a dead machine or
-  another browser; slice 1 covers a closed tab with the draft backup.
-- **Answerer flags on `serve`.** `--model`, `--effort` and `--session`,
-  recorded in `review_started`. Slice 1 `serve` takes the file only;
-  Explain is their only reader.
-- **Finer blocks.** Slice 1 blocks are the document's top-level elements:
-  a whole list, table or block quote is one block for the gutter marks and
-  the diff. Slice 2 may split lists and quotes into their items.
-- **Block pairing by content.** Slice 1 pairs changed blocks in order, so a
-  paragraph inserted before an edited one shows as changed and the edited
-  one as added. Both are still marked.
-- **Images with relative paths.** `serve` serves only the page and its own
-  assets, so an image the markdown names by a repository path does not
-  load. Serving them needs a confined path under the file's directory.
-  An image cannot be commented on either: a selection over an image alone
-  quotes nothing, and the server refuses it. Slice 2 lets a selection take
-  an image whole, as it takes a diagram.
-- **Link from an applied thread to its change.** Slice 1 cards say only
-  "applied in round N". When the anchor's lines overlap a block changed
-  in that round, the card links to it.
-
-Parked, designed for but not built:
-
-- **Explain.** A question on a selection, answered while the review goes on,
-  without editing the file. Answered by a read-only fork of the agent session.
-  Until it is built, `serve` refuses a question.
-- **Codex** as a second host.
-- **Live comments** delivered one by one instead of per submit.
+- **Blocks are top-level elements.** A whole list, table or block quote is
+  one block for the gutter marks and the diff. Changed blocks are paired
+  in order, so a paragraph inserted before an edited one shows as changed
+  and the edited one as added. Both are still marked.
+- **Images.** `serve` serves only the page and its own assets, so an image
+  the markdown names by a repository path does not load. An image cannot
+  be commented on: a selection over an image alone quotes nothing, and the
+  server refuses it.
+- **Applied threads** say only "applied in round N"; they do not link to
+  the change.
+- **Questions.** The log format has a `question` kind for a planned
+  Explain flow; `serve` refuses a question.
 
 Out of scope: reviewing code, multi-user review, anything reachable from
 outside the machine.
@@ -90,28 +65,23 @@ outside the machine.
 6. **The skill owns the procedure.** `gk` output is data plus a one-line
    command reminder, never a prompt. Changing the workflow is a skill edit,
    not a Rust change.
-7. **Explain never edits.** The answerer runs with read-only tools; that is
-   enforced by the tool allowlist, not asked for in a prompt.
 
 ## Context (C4 level 1)
 
 C4 notation drawn as mermaid flowcharts; mermaid's own C4 layout overlaps
-labels. Dark blue is a person, blue is this system, grey is outside it,
-dotted lines are parked.
+labels. Dark blue is a person, blue is this system, grey is outside it.
 
 ```mermaid
 flowchart TB
   human(["<b>Reviewer</b><br/>[Person]<br/>Reads, comments, submits, approves"]):::person
   agent["<b>Claude Code session</b><br/>[External system]<br/>Agent driven by the gist-md-review skill"]:::ext
   mdr["<b>gk md-review</b><br/>[System]<br/>Renders the document, collects the review, keeps versions"]:::system
-  claude["<b>claude CLI, headless fork</b><br/>[External system]<br/>Answers Explain questions — parked"]:::ext
   fs[("<b>Working tree</b><br/>[External]<br/>The markdown file under review")]:::ext
 
   human -- "reviews in browser<br/>HTTP, 127.0.0.1" --> mdr
   agent -- "starts, waits for review, replies<br/>gk CLI" --> mdr
   agent -- "edits the document" --> fs
   mdr -- "reads, snapshots" --> fs
-  mdr -. "asks questions<br/>process spawn" .-> claude
   classDef person fill:#08427b,stroke:#052e56,color:#fff
   classDef system fill:#1168bd,stroke:#0b4884,color:#fff
   classDef container fill:#438dd5,stroke:#2e6295,color:#fff
@@ -134,7 +104,6 @@ flowchart TB
   end
 
   doc[("<b>docs/foo.md</b><br/>[Working file]")]:::ext
-  claude["<b>claude -p --fork-session</b><br/>[External]<br/>Read-only answerer — parked"]:::ext
 
   human -- "selects, comments, submits" --> page
   page -- "loads rendering, posts comments<br/>HTTP + token" --> serve
@@ -145,7 +114,6 @@ flowchart TB
   serve -- "writes on approve" --> records
   serve -- "reads, snapshots" --> doc
   agent -- "edits" --> doc
-  serve -. "spawns per question" .-> claude
   classDef person fill:#08427b,stroke:#052e56,color:#fff
   classDef system fill:#1168bd,stroke:#0b4884,color:#fff
   classDef container fill:#438dd5,stroke:#2e6295,color:#fff
@@ -160,7 +128,6 @@ flowchart TB
 | `wait`, `reply`, `next`, `status` | one call | nothing; ask the server |
 | Review store | from start of review until approval is delivered | — |
 | Review record | until the user deletes it | — |
-| Answerer (parked) | one question | nothing; its answer returns via the server |
 
 ## Components of `serve` (C4 level 3)
 
@@ -177,12 +144,10 @@ flowchart TB
     log["<b>Review log</b><br/>[append-only JSONL, one mutex]<br/>Threads, messages, rounds; derives state"]:::container
     versions["<b>Versions</b><br/>[v1.md … vN.md + hash]<br/>Snapshots the working file per round"]:::container
     waiters["<b>Waiters</b><br/>[long-poll, reconnecting]<br/>Deliver pending submit or approval"]:::container
-    answer["<b>Answerer launcher</b><br/>[bounded queue]<br/>Spawns read-only forks — parked"]:::container
   end
 
   store[("<b>Review store</b>")]:::ext
   doc[("<b>Working file</b>")]:::ext
-  claude["<b>claude CLI</b>"]:::ext
 
   page -- "GET /, POST /api/…" --> http
   cli -- "POST /api/…" --> http
@@ -193,8 +158,6 @@ flowchart TB
   anchor -- "open threads" --> log
   http --> log
   log -- "submit, approve" --> waiters
-  log -. "question posted" .-> answer
-  answer -. "spawn" .-> claude
   log -- "append" --> store
   versions -- "write" --> store
   versions -- "read" --> doc
@@ -209,7 +172,7 @@ flowchart TB
 
 Review mode as in Google Docs: the document on the left, comment cards in a
 margin on the right, level with their text. Layout, card states and
-re-anchoring are in the [page DLD](md-review-dld-page.md). A toolbar stays
+re-anchoring are in the [page design](md-review-page.md). A toolbar stays
 at the top, as in GitLab's merge request review:
 
 ```
@@ -219,8 +182,8 @@ docs/foo.md · round 2 · 3 pending   [Show changes ✓]  [Submit review]  [Appr
 - **Selection.** Selecting text leaves it selected and shows a small **Add
   comment** button where the selection ended; nothing else happens until it
   is clicked, so text can still be selected to copy. The button opens a
-  draft card in the margin: a text field and a **Comment** button. **Explain** joins it when the parked flow
-  is built. A pending comment can be edited or deleted until submit.
+  draft card in the margin: a text field and a **Comment** button. A
+  pending comment can be edited or deleted until submit.
 - **Submit review** opens a dialog: an optional overall comment and the list
   of pending comments. Submit is possible with inline comments, an overall
   comment, or both. With neither there is nothing to send; the dialog's
@@ -239,8 +202,9 @@ docs/foo.md · round 2 · 3 pending   [Show changes ✓]  [Submit review]  [Appr
   deleted blocks show as struck stubs.
 - **Connection indicator**, always visible: agent listening, agent
   revising, agent not listening yet, agent away (both with the request
-  that resumes the review, to give the agent), or server offline. The page reconnects to `serve` by itself and keeps unsent drafts
-  in browser storage until `serve` accepts them.
+  that resumes the review, to give the agent), or server offline. The page
+  reconnects to `serve` by itself and keeps unsent drafts in browser
+  storage until `serve` accepts them.
 - **Banners** say when the working file differs from the version on
   screen, and when a write was refused because the page is stale (the page
   catches up by itself; drafts are kept).
@@ -330,7 +294,9 @@ version so the round count stays honest.
   the server checks them under the log mutex. A write to a submitted round
   or an old version gets 409, appends nothing, and the page keeps the draft,
   shows why and catches up by itself; a comment on an older version asks
-  the reviewer to select the text again. A repeated submit of a closed round is idempotent.
+  the reviewer to select the text again. A submit of a round already
+  submitted answers 204 and appends nothing, so a repeated submit is
+  idempotent.
 - **Delivery.** A submit stays pending until `next`. `wait` started after
   the submit returns it at once, so a `wait` killed or never started loses
   nothing. `wait` long-polls in requests of about a minute and reconnects.
@@ -343,9 +309,10 @@ version so the round count stays honest.
   `wait` until `next`, so it shows as revising, not away. `status` shows waiters and an
   undelivered submit.
 - **File drift.** Each version is hashed. When the working file differs
-  from the version the reviewer read by the time the review is delivered,
-  someone other than the agent edited it; `wait` output and the page both
-  say so, since the review's line numbers refer to the version read.
+  from the version the reviewer read at the time the review is delivered,
+  `wait` output and the page both say so, since the review's line numbers
+  refer to the version read. On a first delivery someone other than the
+  agent edited the file; on a repeat it may be the agent's own edits.
 
 ### Approve
 
@@ -374,17 +341,19 @@ Intermediate versions go with the store; git keeps whatever the user
 committed along the way.
 
 - **Any time.** Approve is allowed while a submit is pending. The agent's
-  next `wait`, `reply` or `next` returns "approved" instead; a `reply` or
-  `next` after approval exits 1 naming it.
+  next `wait` returns "approved"; a `reply` or `next` after approval exits
+  1 naming it.
 - **Delivered like a submit.** The server keeps the store and keeps running
   until a client has received the approval, then deletes the store and
   exits. A `stop` before delivery keeps the store.
 - **Bound to what was seen.** The approval names the version on screen and
-  its hash. When the working file differs, because the agent edited after
-  that version, the record says so and carries the full approved text
-  and the block diff to the working file; the skill must not present that
-  difference as approved. Deleting the store then loses nothing that was
-  approved.
+  its hash. When the working file differs at approve, because the agent
+  edited after that version, the record says so and carries the full
+  approved text and the block diff to the working file; the skill must not
+  present that difference as approved. The record is written at approve:
+  an edit made after it, before the approval is delivered, is reported by
+  `wait` as `file_differs` but the record does not carry the approved
+  text, which then survives only in git.
 - **Review record.** A markdown file under `.md-review/records/`, outside
   the store and so kept after approval: every round's threads, messages
   and outcomes, the approve note, and the approved version. Complete, not
@@ -396,34 +365,6 @@ committed along the way.
   and the approve answer to the page says so. `serve` then runs until
   `stop`: a client will not read `server.json` through a symlink, so
   `wait` cannot deliver that approval.
-
-### Explain (parked)
-
-```mermaid
-sequenceDiagram
-  autonumber
-  actor H as Reviewer
-  participant B as Browser
-  participant S as gk md-review serve
-  participant C as claude -p --fork-session
-
-  H->>B: selects text, writes a question in the draft card, Explain
-  B->>S: POST /api/threads {anchor, kind: question, body}
-  S->>S: append message_posted
-  S->>C: spawn: --resume <sid> --fork-session --model <m> --effort <e> --tools Read,Grep,Glob
-  Note over S,C: bounded: at most K running, the rest queued
-  C-->>S: answer on stdout
-  S->>S: append message_posted {author: agent, outcome: answered, model}
-  B->>S: poll sees the answer
-  B->>H: answer shown in the thread, "answered by <model> on round N"
-```
-
-On submit, question threads travel with the comments so the agent does not
-edit against what the answerer told the reviewer. The answerer runs the
-model and effort the review started with; the agent passes them at `serve`
-time (`--model`, `--effort`), with the session id (`--session`). Verified on
-Claude Code 2.1.283: a resumed fork honours `--model`, and `--effort` and
-`--tools` exist. How the agent learns its own session id is open.
 
 ## Data
 
@@ -451,8 +392,8 @@ The lock is an OS file lock (`File::lock`), released when `serve` dies, so a
 crash never leaves a review locked.
 
 `serve` adds `.md-review/` to `.git/info/exclude` rather than touching the
-user's `.gitignore`. Outside a git repository the store goes next to the
-working directory.
+user's `.gitignore`. Outside a git repository the root is the current
+directory, and a file outside it is refused.
 
 ### Review log
 
@@ -461,8 +402,8 @@ seconds since the Unix epoch. Current state is a fold over the log.
 
 | Event | Fields |
 |---|---|
-| `review_started` | format (1), file, version 1, hash; slice 2 adds host, model, effort, session (optional) |
-| `message_posted` | thread, message, author (`human`/`agent`), kind (`comment`; `question` with Explain), body, anchor (new thread only), outcome (agent only: `applied`/`declined`; `answered` with Explain); Explain adds model (answerer only) |
+| `review_started` | format (1), file, version 1, hash |
+| `message_posted` | thread, message, author (`human`/`agent`), kind (`comment`; `question` is reserved and refused), body, anchor (new thread only), outcome (agent only: `applied`/`declined`) |
 | `message_edited` | message, body (reviewer's own pending message only) |
 | `message_deleted` | message (reviewer's own pending message only) |
 | `review_submitted` | round, summary (optional) |
@@ -499,7 +440,7 @@ small edits. `span` is where the quote is in `version`, in visible
 characters per block; the page draws the thread from it without searching,
 and the server records the new span when it moves the anchor. An anchor
 logged before spans were recorded has none, and the page marks its whole
-blocks. `headings` gives the answerer the section without reading the
+blocks. `headings` gives the agent the section without reading the
 whole file.
 
 Re-anchoring runs on the server, against rendered text, not markdown
@@ -510,7 +451,7 @@ matches the quote in the next version's plain text with all whitespace
 ignored, across block boundaries, so a quote may span blocks. A quote found without its context is re-attached only
 when it occurs once under the same heading path in both the old and the
 new version; anything else is orphaned rather than guessed. Steps in the
-[page DLD](md-review-dld-page.md#re-anchoring-after-a-round).
+[page design](md-review-page.md#re-anchoring-after-a-round).
 
 ### What `wait` returns
 
@@ -522,7 +463,7 @@ text, and a new dependency.
 Human rendering, what wakes the agent:
 
 ```
-review submitted · docs/foo.md · round 2 · 2 threads
+review submitted · docs/foo.md · round 2 · 1 thread
 
 summary
   Good structure. Cut the security section by half.
@@ -530,11 +471,6 @@ summary
 [t7] comment · lines 41–44 · Loop › Anchors
   > A comment stores the quoted text, surrounding context, and the source line range
   Too long; one sentence.
-
-[t9] question · lines 88–90 · Security · answered by claude-fable-5-1
-  > Check the Host header against 127.0.0.1:<port>
-  Why is the token not enough?
-  ↳ The token keeps other pages out; the Host check stops DNS rebinding.
 
 next: gk md-review reply docs/foo.md <id> --outcome applied|declined --note "…", then gk md-review next docs/foo.md
 ```
@@ -584,7 +520,7 @@ Two additions, both omitted when they do not apply:
 
 - `redelivered`: the first delivery time and the threads already replied
   to. Human rendering: a line under the header,
-  `redelivered · first 14:02 · replied t7`.
+  `redelivered · first 14:02 UTC · replied t7`.
 - `file_differs`: the working file is not the version the reviewer read.
   Human rendering: `warning: docs/foo.md changed since round 2 was
   read; line numbers refer to v2`.
@@ -644,8 +580,8 @@ section covers them.
   the page's own assets under `/assets/`; the Host check covers those too.
 - Check the `Host` header against `127.0.0.1:<port>` to refuse DNS rebinding.
 - Any local process that reads the token could post comments the agent acts
-  on, or start answerer runs that cost model calls. Accepted for a
-  single-user machine; the token keeps other browser tabs out.
+  on. Accepted for a single-user machine; the token keeps other browser
+  tabs out.
 - Rendered markdown is untrusted: no raw HTML passthrough, `javascript:`
   links stripped, mermaid in strict security mode, no external requests
   from the page. The CSP allows scripts, images and requests from `serve`
@@ -653,75 +589,8 @@ section covers them.
   style cannot send anything out under that policy.
 - The bundled `mermaid.min.js` is pinned to a version, with its checksum
   recorded in the repository, and compiled into `gk`
-  ([ADR 0015](../adr/0015-md-review-http-stack.md)).
+  ([ADR 0015](adr/0015-md-review-http-stack.md)).
 - `serve` refuses a file over 1 MiB with exit 1, naming the limit, so
   rendering, diffing and `wait` output stay bounded.
 - Store deletion reuses the confined-path and symlink refusal of ADRs 0008
   and 0010; a store that cannot be deleted safely is kept.
-
-## Settled
-
-- **`wait` times out before the host does.** Claude Code stops a
-  background task at its timeout (at most 2 h), reports it as killed and
-  tells the agent not to restart it. So `wait` takes `--timeout` below that
-  limit (110 min under 120), exits 0 with a `timeout` event, and the skill
-  starts it again: one short agent turn per idle timeout. A review takes as
-  long as the reviewer needs; a submit during the restart is pending, not
-  lost. Verified on 2026-10-01 with a spike: a click woke the agent; a task
-  that hit the limit was killed with the no-restart note; one that timed
-  out first completed cleanly; a submit after 31 min woke the agent.
-- **Naming.** `gist-md-review`, next to `gist-doc-review`, which reviews
-  code comments. The skill's description tells them apart: the user
-  reviews a markdown file themselves, not the agent reviewing code.
-- **Answerer model.** Same model and effort as the review started with.
-  `claude -p --resume <sid> --fork-session --model <m>` honours the model
-  (verified on 2.1.283).
-
-## File arrangement
-
-```
-docs/
-  design/
-    md-review-hld.md               # this HLD; ongoing work, linked from TODO.md
-    md-review-dld-page.md          # DLD: review page, cards, keys, re-anchoring
-  cases/
-    gist-md-review.md              # behavior cases, written before implementation
-  adr/
-    0013-wake-the-agent-with-a-background-wait.md  # background wait over MCP
-    0014-review-state-in-an-append-only-log.md     # event log, one writer, store
-    0015-md-review-http-stack.md   # axum, mermaid embedded, long-poll
-  tool-contract.md                 # new section: long-running subcommands
-  architecture.md                  # one row for md_review/
-skills/
-  gist-md-review/
-    SKILL.md                       # drives the loop: serve, wait, edit, reply, next
-    references/
-      review-json.md               # the wait payload, for the agent
-tools/crates/gist-cli/src/md_review/
-  mod.rs                           # subcommands, argument parsing
-  serve.rs                         # HTTP API, token and Host checks
-  api.rs                           # what serve answers the clients, Human and Serialize
-  client.rs                        # wait/reply/next/status talking to serve
-  store.rs                         # event log, fold, lock, versions, server.json
-  record.rs                        # review record written on approve
-  render.rs                        # comrak with sourcepos, block plain text, heading paths
-  diff.rs                          # block diff between versions
-  anchor.rs                        # re-anchoring on rendered text
-  assets/                          # page.html, page.js, page.css, mermaid.min.js
-    anchor.js  margin.js           # pure functions, unit tested with node --test
-tools/crates/gist-cli/tests/md_review.rs
-```
-
-`answer.rs`, the answerer launcher, belongs to the parked Explain flow and is
-not created in slice 1. `node --test` runs in `just ci` with no npm
-dependencies; the DOM glue is covered by the host case.
-
-`docs/design/` is new: a place for designs of work in progress, too long for
-`TODO.md` and not yet decisions. When the feature ships, lasting parts move
-to `architecture.md`, cases and ADRs, and the design file is deleted or
-reduced to what the others do not cover.
-
-## Open questions
-
-1. **Session id** for the Explain fork: how the agent or `gk` learns it.
-   A hook sees it; the agent may not.

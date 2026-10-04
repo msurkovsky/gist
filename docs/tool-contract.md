@@ -52,8 +52,8 @@ addition:
   (`serve`) prints its result as the first line, then nothing until it
   exits. A command that blocks for an event (`wait`) prints only its final
   result, on exit. No heartbeats, no progress, in either rendering.
-- **A timeout is an outcome.** A blocking command takes `--timeout`, and it
-  is required when the caller runs under a host limit. When it expires the
+- **A timeout is an outcome.** A blocking command requires `--timeout`,
+  set below the host's limit when the caller runs under one. When it expires the
   command prints a timeout result in both renderings and exits `0`. The
   host kills a task that reaches its own limit and tells the agent not to
   restart it, so the command must end first; the caller then decides
@@ -64,9 +64,11 @@ addition:
   killed, timed out or never started is safe to run again: a later `wait`
   returns what an earlier one missed, marked as a repeat when it was
   already delivered.
-- **No second instance.** Starting a long-running command that is already
-  running for the same target prints the running one's result and exits
-  `0`; it does not start another.
+- **No second server.** Starting a command that serves (`serve`) while it
+  already runs for the same target prints the running one's result and
+  exits `0`; it does not start another. A blocking command (`wait`) is not
+  exclusive: two running at once both receive the same event, the second
+  marked as a repeat.
 - **Prompt exit on a signal.** On SIGINT or SIGTERM the command stops
   promptly and leaves its state consistent; locks are OS locks, released
   with the process.

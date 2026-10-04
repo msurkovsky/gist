@@ -1,10 +1,10 @@
 # 15. Serve the review page with `axum`, long-poll and embedded mermaid
 
-Proposed — 2026-10-01.
+Accepted — 2026-10-01. Built and tried in Claude Code by 2026-10-04.
 
 ## Context
 
-`gk md-review serve` ([design](../design/md-review-hld.md)) is an HTTP
+`gk md-review serve` ([design](../md-review.md)) is an HTTP
 server on 127.0.0.1 for one reviewer: one browser page, a background
 `wait`, and short `reply`, `next` and `status` calls. Both the page and
 `wait` have to learn about changes as they happen: the page about a new
@@ -56,7 +56,7 @@ Crate data from crates.io, checked 2026-10-01.
 
 - **From a CDN:** nothing in the binary, but the page breaks offline, needs
   the network, and tells a third party that a review is open. The page
-  makes no external requests (HLD Security).
+  makes no external requests (`docs/md-review.md`, Security).
 - **Downloaded on first use and cached:** small binary, but a download
   path, a cache and a checksum check to own, and the first review offline
   still fails.
@@ -103,6 +103,7 @@ restart, through `ureq`. A test compares the embedded `mermaid.min.js`,
 
 | When | Who | Why |
 |---|---|---|
+| 2026-10-04 09:47 | Martin Surkovsky | Accepted: built, tested and tried in Claude Code |
 | 2026-10-01 21:47 | Martin Surkovsky | Pin mermaid 11.17.2 with a checksum test; record measured sizes |
 | 2026-10-01 07:24 | Martin Surkovsky | Choose `axum` over `tiny_http`, unmaintained since 2022; name the client |
 | 2026-10-01 06:29 | Martin Surkovsky | Created |

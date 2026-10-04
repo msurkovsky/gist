@@ -1,6 +1,6 @@
 //! The agent's side: `wait`, `reply`, `next`, `status` and `stop` find the
 //! named review's server through its `server.json` and ask it over HTTP. They
-//! write nothing; `serve` is the only writer. docs/design/md-review-hld.md#cli-surface.
+//! write nothing; `serve` is the only writer. docs/md-review.md#cli-surface.
 
 use serde::de::DeserializeOwned;
 use serde::Serialize;

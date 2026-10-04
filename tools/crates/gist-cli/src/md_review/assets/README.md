@@ -1,7 +1,7 @@
 # Review page assets
 
 Compiled into `gk` and served by `gk md-review serve` under `/assets/`.
-Design: `docs/design/md-review-dld-page.md`.
+Design: `docs/md-review-page.md`.
 
 - `page.html`, `page.css`, `page.js`: the page and its DOM glue.
 - `anchor.js`, `margin.js`: pure functions, tested by `*.test.js` with

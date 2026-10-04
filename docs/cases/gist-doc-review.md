@@ -22,9 +22,10 @@ comments and docstrings; prose requirements and architecture need a broader revi
 
 Request: "Review comments in the current diff."
 Fixture: no `gk` on PATH or no Git repository.
-Expected: identify the missing measurement and its effect on the review. Continue
-with a supplied diff when sufficient, explicitly noting the missing measurement;
-do not silently install tools, invent a ratio, or edit the reviewed files.
+Expected: identify the missing measurement and its effect on the review; when
+`gk` is missing, give the install command from the skill. Continue with a
+supplied diff when sufficient, explicitly noting the missing measurement; do
+not silently install tools, invent a ratio, or edit the reviewed files.
 
 ## Evidence
 

@@ -2,7 +2,7 @@
 //! with whitespace ignored, never on markdown source. A quote is attached
 //! with its context, or alone when it is unique under the same heading path
 //! in both versions; anything else is orphaned rather than guessed.
-//! docs/design/md-review-dld-page.md#re-anchoring-after-a-round.
+//! docs/md-review-page.md#re-anchoring-after-a-round.
 
 use super::render::Block;
 use super::store::{Anchor, Point, Span};

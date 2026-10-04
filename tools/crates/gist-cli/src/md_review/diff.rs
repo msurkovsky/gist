@@ -1,6 +1,6 @@
 //! Block diff between two versions, for "Show changes" and the review
 //! record. Blocks compare by their source, so a changed link target counts
-//! even when the text reads the same. docs/design/md-review-dld-page.md#changes-between-rounds.
+//! even when the text reads the same. docs/md-review-page.md#changes-between-rounds.
 
 use serde::Serialize;
 use similar::{capture_diff_slices, Algorithm, DiffOp};
