@@ -188,6 +188,15 @@ takes the whole block.
 `margin.js` places cards at their anchor's offset; overlapping cards move
 down in document order, and the focused card pushes the others.
 
+### page-add-comment
+
+Checked in a browser. A selection stays selected and shows Add comment
+next to where it ended; no card opens and focus stays in the document.
+Clicking it opens a draft card on the selection's anchor, focused.
+Collapsing the selection or `Esc` removes the button and creates nothing.
+With the round submitted, no button shows. Right-click shows the
+browser's own menu.
+
 ### page-render-safety
 
 Raw HTML in the markdown is not passed through, `javascript:` links are

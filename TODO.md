@@ -55,13 +55,8 @@ deployment, so no full eng review; the steps below replace it, in order:
 5. ~~Trial the current build.~~ Done 2026-10-04: Trial 3 in
    `docs/cases/gist-md-review.md` passed every host case. Not yet
    shown: that a redelivered round never applies an edit twice.
-6. Ship: decide the "fix from use" below, get an independent review
-   of the branch, merge, then move the HLD's lasting parts to
+6. Ship: get an independent review of the branch, merge, then move the HLD's lasting parts to
    `architecture.md`, the cases and the ADRs, and drop this entry.
-
-Fix from use: a mouse selection opens the comment draft at once. Keep
-the selection visible first and open the draft from an icon or button
-next to it, as Google Docs does.
 
 Slice 2, deferred by the review: vim key bindings; word-level track changes
 (slice 1 marks changed blocks); export and import of a review.

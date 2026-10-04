@@ -216,8 +216,10 @@ at the top, as in GitLab's merge request review:
 docs/foo.md · round 2 · 3 pending   [Show changes ✓]  [Submit review]  [Approve]
 ```
 
-- **Selection.** Selecting text opens a draft card in the margin: a text
-  field and a **Comment** button. **Explain** joins it when the parked flow
+- **Selection.** Selecting text leaves it selected and shows a small **Add
+  comment** button where the selection ended; nothing else happens until it
+  is clicked, so text can still be selected to copy. The button opens a
+  draft card in the margin: a text field and a **Comment** button. **Explain** joins it when the parked flow
   is built. A pending comment can be edited or deleted until submit.
 - **Submit review** opens a dialog: an optional overall comment and the list
   of pending comments. Submit is possible with inline comments, an overall
