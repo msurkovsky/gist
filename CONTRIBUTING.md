@@ -110,6 +110,16 @@ one-liner: one command or pipeline, no branching, no loops, no argument parsing.
 under `scripts/` behind a `just` recipe. When it outgrows that, port it to `gk` rather than
 growing the script.
 
+## Version `gk`
+
+`gk` follows semantic versioning; `version` in `tools/Cargo.toml` is the
+workspace's one version. It stays below 1.0 until the first feedback from
+outside use: bump the minor (`0.2.0` → `0.3.0`) for new or changed behavior,
+of a subcommand or of the skills `gk init` installs, and the patch for a fix.
+Bump it on the branch that makes the change, before merge. `gk md-review`
+clients refuse a server of another version, so a change merged without a
+bump can talk to an old server.
+
 ## Add a rule
 
 `rules/<topic>.md`, language-agnostic, short imperative lines. If the rule only holds for
