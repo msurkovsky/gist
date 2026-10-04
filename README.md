@@ -44,11 +44,11 @@ All support implicit selection. Invoke explicitly with `/gist-outline`,
 `$gist-doc-review` in Codex. Host evaluation status and acceptance scenarios
 live in `docs/cases/`.
 
-For the rest of a change's life, use the vendored `mattpocock` skills, installed with
-`gk init --claude --experimental=mattpocock`: `/mattpocock-code-review` before opening an
-MR, `/mattpocock-pr` for its description, `/mattpocock-resolving-merge-conflicts`
-mid-rebase. `code-review` expects `/mattpocock-setup-matt-pocock-skills` to have run in
-the project first. The rules that hold across every
+For the rest of a change's life, install Matt Pocock's skills from
+[upstream](https://github.com/mattpocock/skills), as its README says: its
+`code-review` before opening an MR, `pr` for its description,
+`resolving-merge-conflicts` mid-rebase. `code-review` expects
+`setup-matt-pocock-skills` to have run in the project first. The rules that hold across every
 MR, such as backup refs before a rewrite, reply format, and supersede order, are in
 `rules/merge-requests.md`, not in a skill you have to remember to invoke. See
 `docs/adr/0011-drop-the-mr-workflow-skills.md`.
@@ -82,7 +82,7 @@ gk doc                             # how much of my change is documentation
 gk check .                         # validate a Gist source checkout and its vendor content
 gk init --claude                   # vendor the skills into ./.claude/skills/ of the repo you are in
 gk init --codex                    # same skills, byte-identical, into ./.agents/skills/ for Codex CLI
-gk init --claude --codex --experimental=mattpocock  # any combination, one call
+gk init --claude --codex           # both targets, one call
 gk init --claude --uninstall       # remove what a prior init --claude put there
 gk hook install                    # put the commit-msg hook into the repo you are in
 ```
@@ -92,9 +92,10 @@ conflict instead; `--force` overrides. `--claude` and `--codex` are two
 independent targets, combinable in one call; either or both is required, and
 picking neither is a refusal, not a guess (see
 `docs/adr/0006-codex-as-a-second-init-target.md`). Skills land under their
-`gist-` names so they cannot shadow one the target repo already has;
-`--experimental` skills land under `<package>-` names for the same reason,
-regardless of which target(s) they're installed into.
+`gist-` names so they cannot shadow one the target repo already has.
+`--experimental=<package>` exists only in a `gk` built from a checkout
+(`just install`), for contributors trying a vendored skill; release binaries
+refuse it. Its skills land under `<package>-` names for the same reason.
 
 `init` writes a manifest (`<target>/.gist-manifest.json`) recording the files it
 placed and any it found already identical, also when a run fails partway. A run
@@ -158,8 +159,8 @@ josh clone <path-or-url-of-this-repo> ':workspace=views/<consumer>' <destination
 
 Inside the projection: `git commit` as usual, `josh push` to write back here, `josh changes
 pull` to take this repo's changes. A view is still the only way to work on an
-`experimental/` tree's own history; `gk init --experimental=<package>` gets a project its
-skills without one, name-prefixed by package (see
+`experimental/` tree's own history; a contributor's `gk init --experimental=<package>`
+gets a project its skills without one, name-prefixed by package (see
 `docs/adr/0005-prefix-experimental-skills-at-install.md`). Edits to vendored paths made
 through a view violate the no-edit rule; adopt first.
 

@@ -62,6 +62,15 @@ source remains untouched. `--claude` and `--experimental` share one `Report`, on
 `--force`, one conflict model — installing from two sources in the same run
 is one `init` call, not two.
 
+`--experimental` is for contributors trying a vendored skill, not a way to
+ship one. Only a build with the `experimental` cargo feature embeds
+`experimental/`: the default for a build from a checkout, so `just install`
+and the tests have it. Release builds, made by `dist` with
+`default-features = false`, refuse the flag and hide it from `--help`; users
+install a third-party skill from its upstream. Shipping it would make Gist the
+distributor of a frozen snapshot of someone else's work, with their notice to
+carry.
+
 Rewriting preserves original line endings and final-newline presence. LF and CRLF
 blank lines, including whitespace-only lines, delimit the paragraphs used to scope
 quoted references; a `Skill tool` mention does not affect other paragraphs.
@@ -86,7 +95,8 @@ installed workflows name the dependencies actually installed for both hosts.
 `init_experimental_unknown_package_names_what_is_available`,
 `init_claude_and_experimental_together_install_both`, and
 `init_experimental_repeated_flag_installs_the_package_once` (all in
-`tests/cli.rs`). `rewrite_skill_name` has unit tests in `init.rs`: it replaces
+`tests/cli.rs`), and, without the feature, `init_experimental_is_refused_by_a_release_build`;
+`just ci` runs both builds. `rewrite_skill_name` has unit tests in `init.rs`: it replaces
 only the frontmatter line, keeps a missing trailing newline missing, and errors
 rather than guessing on an absent line or non-UTF-8 input.
 
@@ -94,6 +104,7 @@ rather than guessing on an absent line or non-UTF-8 input.
 
 | When | Who | Why |
 |---|---|---|
+| 2026-10-04 21:23 | Martin Surkovsky | Release binaries leave `experimental/` out and refuse `--experimental`; vendored skills are for contributors to try, not to ship |
 | 2026-09-25 21:50 | Martin Surkovsky | Attribute changes to the accountable human author |
 | 2026-09-25 21:38 | Martin Surkovsky | Preserve CRLF content and paragraph boundaries during packaging |
 | 2026-09-25 21:15 | Martin Surkovsky | Preserve dependency resolution when package skill names are prefixed |

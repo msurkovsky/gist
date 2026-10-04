@@ -37,7 +37,8 @@ no runtime access to the source tree needed.
 
 Embed `skills/` via `include_dir!("$CARGO_MANIFEST_DIR/../../../skills")` in
 `crates/gist-cli/src/init.rs`. `experimental/` is embedded the same way for
-`--experimental` (`docs/adr/0005`). `crates/gist-cli/build.rs` tells cargo to
+`--experimental` (`docs/adr/0005`), only under the `experimental` cargo feature,
+which release builds leave off. `crates/gist-cli/build.rs` tells cargo to
 rebuild when either tree gains or loses a file, which `include_dir!` cannot
 report itself.
 
@@ -60,6 +61,7 @@ gotcha worth remembering.
 
 | When | Who | Why |
 |---|---|---|
+| 2026-10-04 21:23 | Martin Surkovsky | Release binaries leave `experimental/` out, so only a contributor build embeds it |
 | 2026-09-25 19:00 | Martin Surkovsky | Moved the `experimental/` and `build.rs` note from the header into the Decision |
 | 2026-09-25 07:19 | Martin Surkovsky | Noted that ADR 0005 embeds `experimental/` the same way, so this no longer reads as skills-only |
 | 2026-09-24 07:20 | Martin Surkovsky | Created |

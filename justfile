@@ -14,6 +14,10 @@ release:
 test:
     cargo test --manifest-path {{tools}}/Cargo.toml
 
+# As released: without the `experimental` feature, which dist leaves off.
+test-release:
+    cargo test --manifest-path {{tools}}/Cargo.toml -p gist-cli --no-default-features
+
 # The review page's pure functions; Node only, no npm packages.
 test-page:
     node --test {{tools}}/crates/gist-cli/src/md_review/assets/*.test.js
@@ -24,9 +28,10 @@ fmt:
 lint:
     cargo fmt --manifest-path {{tools}}/Cargo.toml --all --check
     cargo clippy --manifest-path {{tools}}/Cargo.toml --all-targets -- -D warnings
+    cargo clippy --manifest-path {{tools}}/Cargo.toml --all-targets --no-default-features -- -D warnings
 
 # Everything CI runs, locally.
-ci: lint test test-page check
+ci: lint test test-release test-page check
 
 # Put gk on PATH.
 install:

@@ -7,6 +7,8 @@
 //! whichever target(s) were selected, prefixing each skill's name with the
 //! package so it cannot silently shadow — or be shadowed by — a canonical
 //! `gist-` skill (docs/adr/0005-prefix-experimental-skills-at-install.md).
+//! Only a build with the `experimental` feature, the default for a build from
+//! a checkout, embeds that tree; release binaries leave it out and refuse.
 //!
 //! `gk` ships as a single binary with no source tree alongside it, so the
 //! skills this repo produces are embedded into the binary at build time —
@@ -31,6 +33,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Component, Path, PathBuf};
 
 static SKILLS: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/../../../skills");
+#[cfg(feature = "experimental")]
 static EXPERIMENTAL: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/../../../experimental");
 
 const CLAUDE_ROOT: &str = ".claude/skills";
@@ -49,7 +52,7 @@ pub struct Args {
     codex: bool,
 
     /// Also vendor one experimental/<package> tree's skills, name-prefixed
-    #[arg(long, num_args = 1.., value_name = "PACKAGE")]
+    #[arg(long, num_args = 1.., value_name = "PACKAGE", hide = !cfg!(feature = "experimental"))]
     experimental: Vec<String>,
 
     /// Overwrite files with local changes instead of reporting a conflict
@@ -645,6 +648,7 @@ fn sorted_files<'a>(dir: &'a Dir<'a>) -> Vec<&'a File<'a>> {
 
 /// The `skills/` dir inside `experimental/<package>`, or an error listing
 /// every package that actually has one.
+#[cfg(feature = "experimental")]
 fn find_package_skills(package: &str) -> Result<&'static Dir<'static>, String> {
     EXPERIMENTAL
         .get_dir(package)
@@ -663,6 +667,15 @@ fn find_package_skills(package: &str) -> Result<&'static Dir<'static>, String> {
             };
             format!("unknown experimental package: {package} (available: {available})")
         })
+}
+
+#[cfg(not(feature = "experimental"))]
+fn find_package_skills(_package: &str) -> Result<&'static Dir<'static>, String> {
+    Err(
+        "--experimental is not in this build: release binaries leave the vendored \
+         skills out. Build gk from a Gist checkout with `just install` to try them"
+            .to_string(),
+    )
 }
 
 /// Find every skill directory under `dir` — one containing `SKILL.md`

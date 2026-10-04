@@ -10,6 +10,12 @@ description = "gk — the Gist toolkit binary."
 name = "gk"
 path = "src/main.rs"
 
+[features]
+default = ["experimental"]
+# Embeds experimental/ for `gk init --experimental`. Release builds leave it
+# out: vendored skills are for contributors to try, not to ship.
+experimental = []
+
 [dependencies]
 gist-core = { workspace = true }
 axum = { workspace = true }

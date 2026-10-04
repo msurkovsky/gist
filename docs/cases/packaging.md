@@ -28,3 +28,12 @@ blank lines, as paragraph boundaries. A `Skill tool` invocation in one paragraph
 does not change ordinary quoted names in another. Preserve the original separators.
 Frontmatter name rewriting changes only the name line's content, preserving all
 original line endings, even mixed endings, and the presence or absence of a final newline.
+
+## package-release-without-experimental
+
+A release binary, built without the `experimental` feature, refuses
+`gk init --claude --experimental=mattpocock` with exit 1, names `just install`
+as the way to get a build that has it, and writes nothing. `--help` does not
+list the flag. `init_experimental_is_refused_by_a_release_build` in
+[`tests/cli.rs`](../../tools/crates/gist-cli/tests/cli.rs) checks the refusal;
+the hidden flag is checked by reading `--help`, not by a test.

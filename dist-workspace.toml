@@ -15,5 +15,7 @@ targets = ["aarch64-apple-darwin", "x86_64-apple-darwin", "aarch64-unknown-linux
 install-path = "CARGO_HOME"
 # Where to host releases
 hosting = "github"
+# Release builds leave out the `experimental` feature (docs/adr/0005)
+default-features = false
 # Whether to install an updater program
 install-updater = false
