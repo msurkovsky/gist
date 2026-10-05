@@ -9,6 +9,12 @@ model is the doer and the human stays at the altitude where judgment still
 matters. Not line-by-line review. Enough understanding to participate: to scope
 the work, read the shape of what came back, catch the wrong turn, and decide.
 
+![A human reviews a plan in the browser with gist-md-review; the agent revises it and the next round arrives on the page](docs/media/md-review-demo.gif)
+
+*Review moves up to the prose: a human judges the plan before any code is
+written. Here with `gist-md-review`: comments on the page, the agent applies
+one and declines one with its reason, and the next round shows what changed.*
+
 ## Layout
 
 ```
